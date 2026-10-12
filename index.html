@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Przymierz Znicz</title>
+  <title>Wizualizator Znicza</title>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -151,7 +151,7 @@
       isDragging: false
     };
 
-    // 1. Zdjęcie nagrobka
+    // 1. Ładowanie zdjęcia nagrobka
     inputGrave.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -169,7 +169,7 @@
       graveImg.src = url;
     });
 
-    // 2. Zdjęcie znicza
+    // 2. Ładowanie zdjęcia znicza
     inputCandle.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -229,59 +229,76 @@
       }
     }
 
-    // 3. Wtapianie AI (Cloudflare Workers AI)
+    // 3. Generowanie podglądu przez Cloudflare Workers AI Inpainting
     inpaintBtn.addEventListener('click', async () => {
       if (!candleCutCanvas) return;
 
-      statusEl.innerText = "⏳ Generowanie realistycznego cienia i światła przez AI...";
+      statusEl.innerText = "⏳ AI generuje wizualizację (ok. 10-15 sekund)...";
       inpaintBtn.disabled = true;
 
       try {
+        // Skalowanie do optymalnej rozdzielczości modelu SD (512x512)
+        const aiCanvas = document.createElement('canvas');
+        aiCanvas.width = 512;
+        aiCanvas.height = 512;
+        const aiCtx = aiCanvas.getContext('2d');
+        aiCtx.drawImage(canvas, 0, 0, 512, 512);
+
+        // Tworzenie maski z marginesem na cienie
         const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = canvas.width;
-        maskCanvas.height = canvas.height;
+        maskCanvas.width = 512;
+        maskCanvas.height = 512;
         const mCtx = maskCanvas.getContext('2d');
         mCtx.fillStyle = '#000000';
-        mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+        mCtx.fillRect(0, 0, 512, 512);
 
-        const w = candleCutCanvas.width * candleState.scale;
-        const h = candleCutCanvas.height * candleState.scale;
-        const drawX = candleState.x - w / 2;
-        const drawY = candleState.y - h / 2;
+        const ratioX = 512 / canvas.width;
+        const ratioY = 512 / canvas.height;
+
+        const w = candleCutCanvas.width * candleState.scale * ratioX;
+        const h = candleCutCanvas.height * candleState.scale * ratioY;
+        const drawX = (candleState.x * ratioX) - (w / 2);
+        const drawY = (candleState.y * ratioY) - (h / 2);
 
         mCtx.fillStyle = '#ffffff';
-        mCtx.fillRect(drawX, drawY, w, h);
+        mCtx.fillRect(drawX - 5, drawY - 5, w + 10, h + 15);
 
         const [origBlob, maskBlob] = await Promise.all([
-          new Promise(r => canvas.toBlob(r, 'image/png')),
+          new Promise(r => aiCanvas.toBlob(r, 'image/png')),
           new Promise(r => maskCanvas.toBlob(r, 'image/png'))
         ]);
 
         const formData = new FormData();
-        formData.append('image', origBlob);
-        formData.append('mask', maskBlob);
+        formData.append('image', origBlob, 'image.png');
+        formData.append('mask', maskBlob, 'mask.png');
 
-        const res = await fetch(`${WORKER_URL}?action=inpaint`, {
+        const res = await fetch(WORKER_URL, {
           method: 'POST',
           body: formData
         });
 
-        if (!res.ok) throw new Error("Błąd serwera AI: " + res.statusText);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${res.status}`);
+        }
 
         const resultBlob = await res.blob();
         const resultImg = new Image();
         resultImg.onload = () => {
           graveImg = resultImg;
           candleCutCanvas = null;
+          thresholdSlider.parentElement.style.display = 'none';
+          scaleSlider.parentElement.style.display = 'none';
+          inpaintBtn.style.display = 'none';
           render();
-          statusEl.innerText = "Wizualizacja gotowa! Możesz pobrać zdjęcie.";
+          statusEl.innerText = "✨ Gotowe! Znicz został wtopiony przez AI.";
           inpaintBtn.disabled = false;
         };
         resultImg.src = URL.createObjectURL(resultBlob);
 
       } catch (err) {
-        console.error(err);
-        statusEl.innerText = "Błąd generowania AI. Spróbuj ponownie.";
+        console.error("Szczegóły błędu AI:", err);
+        statusEl.innerText = "Błąd AI: " + err.message;
         inpaintBtn.disabled = false;
       }
     });
@@ -304,6 +321,7 @@
       };
     }
 
+    // Obsługa dotyku (telefon)
     canvas.addEventListener('touchstart', (e) => {
       if (!candleCutCanvas) return;
       const pos = getCoords(e.touches[0].clientX, e.touches[0].clientY);
@@ -324,6 +342,7 @@
 
     canvas.addEventListener('touchend', () => { candleState.isDragging = false; });
 
+    // Obsługa myszy (komputer)
     canvas.addEventListener('mousedown', (e) => {
       if (!candleCutCanvas) return;
       const pos = getCoords(e.clientX, e.clientY);
@@ -343,6 +362,7 @@
 
     window.addEventListener('mouseup', () => { candleState.isDragging = false; });
 
+    // Pobieranie gotowego obrazu
     downloadBtn.addEventListener('click', () => {
       const link = document.createElement('a');
       link.download = 'nagrobek-wizualizacja.jpg';
