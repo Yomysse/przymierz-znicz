@@ -9,15 +9,15 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #111827;
-      color: #f9fafb;
+      background: #0f172a;
+      color: #f8fafc;
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
       padding: 16px;
     }
-    h1 { font-size: 1.3rem; margin-bottom: 12px; font-weight: 700; text-align: center; }
+    h1 { font-size: 1.4rem; margin-bottom: 12px; font-weight: 700; text-align: center; }
 
     .step-container {
       width: 100%;
@@ -30,7 +30,7 @@
 
     .btn {
       width: 100%;
-      background: #2563eb;
+      background: #4f46e5;
       color: white;
       border: none;
       padding: 14px;
@@ -40,9 +40,12 @@
       text-align: center;
       cursor: pointer;
       user-select: none;
+      transition: background 0.2s;
     }
-    .btn:disabled { background: #374151; color: #9ca3af; cursor: not-allowed; }
-    .btn-ai { background: #7c3aed; }
+    .btn:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn-candle { background: #0284c7; }
+    .btn-ai { background: #9333ea; }
     .btn-download { background: #16a34a; }
     
     input[type="file"] { display: none; }
@@ -61,8 +64,8 @@
       width: 100%;
       max-width: 440px;
       aspect-ratio: 3 / 4;
-      background: #1f2937;
-      border: 2px dashed #374151;
+      background: #1e293b;
+      border: 2px dashed #334155;
       border-radius: 14px;
       overflow: hidden;
       position: relative;
@@ -77,6 +80,9 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      background: #1e293b;
+      padding: 14px;
+      border-radius: 12px;
     }
     .slider-row {
       display: flex;
@@ -85,7 +91,7 @@
       font-size: 0.85rem;
       color: #cbd5e1;
     }
-    .slider-row input { width: 60%; accent-color: #2563eb; }
+    .slider-row input { width: 55%; accent-color: #4f46e5; }
   </style>
 </head>
 <body>
@@ -98,7 +104,7 @@
     </label>
     <input type="file" id="input-grave" accept="image/*">
 
-    <label class="btn" for="input-candle" id="btn-candle-label" style="display: none; background: #0284c7;">
+    <label class="btn btn-candle" for="input-candle" id="btn-candle-label" style="display: none;">
       🕯️ 2. Wybierz lub zrób zdjęcie znicza
     </label>
     <input type="file" id="input-candle" accept="image/*" capture="environment">
@@ -118,15 +124,17 @@
 
     <div class="slider-row">
       <label for="threshold-slider">Wycięcie tła:</label>
-      <input type="range" id="threshold-slider" min="150" max="250" step="1" value="215">
+      <input type="range" id="threshold-slider" min="140" max="250" step="1" value="215">
     </div>
 
-    <button class="btn btn-ai" id="inpaint-btn">✨ Generuj realistyczną wizualizację (AI)</button>
+    <button class="btn btn-ai" id="inpaint-btn">✨ Wtop znicz przez Hugging Face AI</button>
     <button class="btn btn-download" id="download-btn">💾 Pobierz zdjęcie</button>
   </div>
 
   <script>
-    const WORKER_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
+    // Bezpośredni dostęp do Hugging Face Inference API bez pośrednictwa Cloudflare
+    const HF_TOKEN = "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";
+    const HF_MODEL_URL = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-inpainting";
 
     const statusEl = document.getElementById('status');
     const canvas = document.getElementById('stage');
@@ -138,6 +146,7 @@
     const editControls = document.getElementById('edit-controls');
     const inpaintBtn = document.getElementById('inpaint-btn');
     const downloadBtn = document.getElementById('download-btn');
+
     const scaleSlider = document.getElementById('scale-slider');
     const thresholdSlider = document.getElementById('threshold-slider');
 
@@ -153,7 +162,7 @@
       isDragging: false
     };
 
-    // 1. Ładowanie zdjęcia nagrobka
+    // 1. Ładowanie nagrobka
     inputGrave.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -166,12 +175,12 @@
         render();
 
         btnCandleLabel.style.display = 'block';
-        statusEl.innerText = "Nagrobek wczytany! Teraz dodaj lub zrób zdjęcie znicza.";
+        statusEl.innerText = "Nagrobek wczytany! Teraz dodaj zdjęcie znicza.";
       };
       graveImg.src = url;
     });
 
-    // 2. Ładowanie zdjęcia znicza
+    // 2. Ładowanie znicza
     inputCandle.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -186,7 +195,7 @@
         processCandleCut();
 
         editControls.style.display = 'flex';
-        statusEl.innerText = "Przesuń znicz palcem na płytę nagrobka.";
+        statusEl.innerText = "Przesuń znicz palcem na płytę nagrobka i kliknij przycisk AI.";
       };
       candleRawImg.src = url;
     });
@@ -231,20 +240,22 @@
       }
     }
 
-    // 3. Generowanie podglądu przez AI
+    // 3. Generowanie realistycznego inpaintingu bezpośrednio przez Hugging Face API
     inpaintBtn.addEventListener('click', async () => {
       if (!candleCutCanvas) return;
 
-      statusEl.innerText = "⏳ Wysyłanie do AI (może potrwać ok. 15-25 s)...";
+      statusEl.innerText = "⏳ Wysyłanie do Hugging Face AI (może potrwać ok. 15-25 s)...";
       inpaintBtn.disabled = true;
 
       try {
+        // Skalowanie do optymalnej siatki modelu SD (512x512)
         const aiCanvas = document.createElement('canvas');
         aiCanvas.width = 512;
         aiCanvas.height = 512;
         const aiCtx = aiCanvas.getContext('2d');
         aiCtx.drawImage(canvas, 0, 0, 512, 512);
 
+        // Maska: czarne tło (pozostaje nienaruszone), biały prostokąt (obszar wtapiania)
         const maskCanvas = document.createElement('canvas');
         maskCanvas.width = 512;
         maskCanvas.height = 512;
@@ -261,33 +272,44 @@
         const drawY = (candleState.y * ratioY) - (h / 2);
 
         mCtx.fillStyle = '#ffffff';
-        mCtx.fillRect(drawX - 5, drawY - 5, w + 10, h + 15);
+        mCtx.fillRect(drawX - 6, drawY - 6, w + 12, h + 16);
 
-        const [origBlob, maskBlob] = await Promise.all([
-          new Promise(r => aiCanvas.toBlob(r, 'image/png')),
-          new Promise(r => maskCanvas.toBlob(r, 'image/png'))
-        ]);
+        // Pobranie ciągów Base64 bez nagłówków data:image/png;base64,
+        const imageB64 = aiCanvas.toDataURL('image/png').split(',')[1];
+        const maskB64 = maskCanvas.toDataURL('image/png').split(',')[1];
 
-        const formData = new FormData();
-        formData.append('image', origBlob, 'image.png');
-        formData.append('mask', maskBlob, 'mask.png');
+        const payload = {
+          inputs: "a realistic glass grave candle lantern sitting on a dark polished granite tombstone slab, outdoor cemetery daylight, natural cast shadow and reflections",
+          parameters: {
+            image: imageB64,
+            mask_image: maskB64
+          }
+        };
 
-        const res = await fetch(WORKER_URL, {
+        const res = await fetch(HF_MODEL_URL, {
           method: 'POST',
-          body: formData
+          headers: {
+            'Authorization': `Bearer ${HF_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
         });
 
-        const contentType = res.headers.get("content-type") || "";
-
-        if (contentType.includes("application/json")) {
+        // Obsługa ewentualnego cold-startu modelu lub błędu
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
           const json = await res.json();
           if (json.error) {
+            // Jeśli model się wybudza, Hugging Face zwraca szacowany czas w sekundach
+            if (json.estimated_time) {
+              throw new Error(`Model się wybudza (potrzebuje ok. ${Math.round(json.estimated_time)} s). Spróbuj za chwilę!`);
+            }
             throw new Error(json.error);
           }
         }
 
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          throw new Error(`Błąd HTTP ${res.status}`);
         }
 
         const resultBlob = await res.blob();
@@ -295,17 +317,15 @@
         resultImg.onload = () => {
           graveImg = resultImg;
           candleCutCanvas = null;
-          thresholdSlider.parentElement.style.display = 'none';
-          scaleSlider.parentElement.style.display = 'none';
-          inpaintBtn.style.display = 'none';
+          editControls.style.display = 'none';
           render();
-          statusEl.innerText = "✨ Gotowe! Znicz został wtopiony przez AI.";
+          statusEl.innerText = "✨ Gotowe! Znicz został wtopiony przez AI. Możesz pobrać zdjęcie.";
           inpaintBtn.disabled = false;
         };
         resultImg.src = URL.createObjectURL(resultBlob);
 
       } catch (err) {
-        console.error("Szczegóły błędu AI:", err);
+        console.error("Błąd generowania HF:", err);
         statusEl.innerText = "Błąd AI: " + err.message;
         inpaintBtn.disabled = false;
       }
@@ -370,10 +390,10 @@
 
     window.addEventListener('mouseup', () => { candleState.isDragging = false; });
 
-    // Pobieranie wizualizacji
+    // Pobieranie
     downloadBtn.addEventListener('click', () => {
       const link = document.createElement('a');
-      link.download = 'nagrobek-wizualizacja.jpg';
+      link.download = 'wizualizacja-nagrobek.jpg';
       link.href = canvas.toDataURL('image/jpeg', 0.95);
       link.click();
     });
