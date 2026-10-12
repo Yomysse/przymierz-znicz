@@ -427,8 +427,7 @@
   <script>
     // ---------- KONFIGURACJA GEMINI AI ----------
     const GEMINI_API_KEY = "AIzaSyBWkjBtSpWLPMzp-JuIbW2XyTbHVb_qbh8";
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
     const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
@@ -545,14 +544,14 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-   // ---------- REKOMENDACJE GEMINI AI ----------
+  // ---------- REKOMENDACJE GEMINI AI ----------
     advisorBtn.addEventListener('click', async () => {
       if (!graveCanvas) return;
 
       advisorBtn.disabled = true;
-      advisorBtn.innerText = "⏳ Analizuję pomnik za pomocą AI...";
+      advisorBtn.innerText = "⏳ Analizuję pomnik przez AI...";
       advisorBox.style.display = 'block';
-      advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję kolor kamienia, styl nagrobka i oświetlenie...';
+      advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję nagrobek...';
 
       try {
         const thumb = document.createElement('canvas');
@@ -563,11 +562,11 @@
         const base64Data = thumb.toDataURL('image/jpeg', 0.8).split(',')[1];
 
         const promptText = 
-          "Działasz jako kulturalny doradca i florysta funeralny. Przeanalizuj przesłane zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych, czytelnych punktach doradź:\n" +
-          "1. Jaki styl zniczy najlepiej pasuje (np. nowoczesne lampiony geometryczne, klasyczne szkło mrożone, witrażowe, kapliczki)?\n" +
+          "Działasz jako doradca i florysta funeralny. Przeanalizuj zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych, czytelnych punktach doradź:\n" +
+          "1. Jaki styl zniczy najlepiej pasuje (np. nowoczesne geometryczne, klasyczne kapliczki, mrożone szkło)?\n" +
           "2. Jaka kolorystyka szkła i okuć będzie najbardziej harmonijna (np. złoto, czerń, miedź, srebro)?\n" +
           "3. Jak najlepiej je rozmieścić (proporcje, pojedynczy znicz czy symetryczny układ po bokach)?\n" +
-          "Napisz konkretnie, elegancko i wyczerpująco w punktach.";
+          "Napisz zwięźle, taktownie i w czytelnych punktach.";
 
         const payload = {
           contents: [{
@@ -578,21 +577,30 @@
           }],
           generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: 2048
+            maxOutputTokens: 1024
           }
         };
 
-        const res = await fetch(GEMINI_URL, {
+        // Próba z gemini-2.0-flash
+        let res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
+        // Jeśli model nie jest dostępny, fallback na gemini-2.5-flash
+        if (!res.ok) {
+          res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
+
         const data = await res.json();
 
         if (!res.ok) {
-          const errMsg = data?.error?.message || `Błąd HTTP ${res.status}`;
-          throw new Error(errMsg);
+          throw new Error(data?.error?.message || `Status HTTP ${res.status}`);
         }
 
         const recommendation = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -601,10 +609,10 @@
           advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja AI:</div>\n` + recommendation;
           advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
-          advisorBox.innerText = "Nie udało się wygenerować rekomendacji. Spróbuj ponownie.";
+          advisorBox.innerText = "Nie udało się wygenerować rekomendacji.";
         }
       } catch (err) {
-        console.error("Szczegóły błędu Gemini:", err);
+        console.error("Szczegóły błędu:", err);
         advisorBox.innerText = "Błąd API Gemini: " + err.message;
       } finally {
         advisorBtn.disabled = false;
