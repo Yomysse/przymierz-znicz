@@ -788,7 +788,6 @@
     inputCandle.addEventListener('change', handleCandleFile);
     inputCandleCamera.addEventListener('change', handleCandleFile);
 
-    // ---------- Wybór i panel znicza ----------
     function selectCandle(i) {
       selected = i;
       const c = candles[i];
@@ -899,14 +898,12 @@
       return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
     }
 
-    // Geometryczne dopasowanie perspektywy stania na pochyłej płycie
     function drawPerspectiveCandle(cCtx, cd, x0, y0, w, h) {
       cCtx.save();
       const vertRel = (cd.y / canvas.height) - 0.5;
       const horizRel = (cd.x / canvas.width) - 0.5;
 
       cCtx.translate(cd.x, y0 + h);
-      // Rzut perspektywiczny zbiegający ku górze i dopasowany do kąta kamery
       cCtx.transform(1, 0, -horizRel * 0.045, 0.95 + (vertRel * 0.05), 0, 0);
       cCtx.drawImage(cd.cut, -w / 2, -h, w, h);
       cCtx.restore();
@@ -924,7 +921,6 @@
       if (!candles.length) return;
       const order = drawOrder();
 
-      // Cienie kontaktowe na poziomie Canvas
       for (const cd of order) {
         const { w, h, y0 } = candleRect(cd);
         const baseY = y0 + h;
@@ -942,7 +938,6 @@
         c.restore();
       }
 
-      // Rysowanie zniczy
       for (const cd of order) {
         const { w, h, x0, y0 } = candleRect(cd);
         drawPerspectiveCandle(c, cd, x0, y0, w, h);
@@ -973,35 +968,74 @@
       }
     }
 
-    // ---------- STABLE DIFFUSION AI: MIĘKKA MASKA Z GAUSSIAN FEATHERING ----------
-    function buildFeatheredMask() {
+    // ---------- STABLE DIFFUSION AI W PEŁNI ODSEPAROWANE OD TŁA ----------
+
+    // 1. Maska dla interfejsu API AI (Czarne tło, biały znicz)
+    function buildApiMask() {
       const m = document.createElement('canvas');
       m.width = canvas.width;
       m.height = canvas.height;
       const mc = m.getContext('2d');
-      mc.fillStyle = '#000000';
+      mc.fillStyle = '#000000'; // Krytyczny punkt dla API: czarne tło!
       mc.fillRect(0, 0, m.width, m.height);
 
+      mc.fillStyle = '#ffffff';
       for (const cd of candles) {
         const { w, h, x0, y0 } = candleRect(cd);
-        const baseY = y0 + h;
-
         mc.save();
-        // Miękkie rozmycie krawędzi maski zapobiega jakimkolwiek szwom czy kwadratom
-        mc.filter = `blur(${Math.max(6, Math.round(w * 0.04))}px)`;
-        mc.fillStyle = '#ffffff';
-
-        // 1. Obrys znicza z poszerzeniem
+        mc.filter = 'blur(4px)';
         drawPerspectiveCandle(mc, cd, x0, y0, w, h);
-
-        // 2. Podstawa i obszar cienia pod zniczem (dokładna elipsa, nie kwadrat!)
         mc.beginPath();
-        mc.ellipse(cd.x, baseY + (h * 0.04), w * 0.65, h * 0.22, 0, 0, Math.PI * 2);
+        mc.ellipse(cd.x, y0 + h, w * 0.65, h * 0.2, 0, 0, Math.PI * 2);
         mc.fill();
-
         mc.restore();
       }
       return m;
+    }
+
+    // 2. Maska przezroczysta zabezpieczająca tło zdjęcia w naszej przeglądarce!
+    function compositeAIRendering(aiImg) {
+      const out = document.createElement('canvas');
+      out.width = canvas.width;
+      out.height = canvas.height;
+      const oCtx = out.getContext('2d');
+
+      // Oryginalny, bezpieczny nagrobek w wysokiej rozdzielczości
+      drawComposite(oCtx);
+
+      const blendMask = document.createElement('canvas');
+      blendMask.width = canvas.width;
+      blendMask.height = canvas.height;
+      const bCtx = blendMask.getContext('2d');
+      
+      // KRYTYCZNY PUNKT: Przezroczyste tło. Dzięki temu tekst z AI nigdy nie trafi na ekran
+      bCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+      bCtx.fillStyle = '#ffffff';
+      for (const cd of candles) {
+        const { w, h, x0, y0 } = candleRect(cd);
+        bCtx.save();
+        bCtx.filter = 'blur(3px)'; // Miękkie, ale zwarte obrzeże wokół znicza
+        drawPerspectiveCandle(bCtx, cd, x0, y0, w, h);
+        bCtx.beginPath();
+        bCtx.ellipse(cd.x, y0 + h, w * 0.65, h * 0.2, 0, 0, Math.PI * 2);
+        bCtx.fill();
+        bCtx.restore();
+      }
+
+      // Wycina z obrazka AI WYŁĄCZNIE piksele wokół znicza
+      const aiLayer = document.createElement('canvas');
+      aiLayer.width = canvas.width;
+      aiLayer.height = canvas.height;
+      const aCtx = aiLayer.getContext('2d');
+      aCtx.drawImage(aiImg, 0, 0, canvas.width, canvas.height);
+      aCtx.globalCompositeOperation = 'destination-in';
+      aCtx.drawImage(blendMask, 0, 0);
+
+      // Nakłada tylko poprawionego znicza na oryginalne zdjęcie
+      oCtx.drawImage(aiLayer, 0, 0);
+
+      return out;
     }
 
     async function callAI(srcCanvas, maskFull, W, H, prompt, negative, strength) {
@@ -1037,31 +1071,7 @@
       if (!res.ok) throw new Error(`Błąd HTTP ${res.status}`);
 
       const img = await loadImage(await res.blob());
-      return { img, maskSmall, aiCanvas };
-    }
-
-    // Płynne wtopienie wygenerowanego obrazu z zachowaniem ostrości reszty nagrobka
-    function compositeAIRendering(aiImg) {
-      const out = document.createElement('canvas');
-      out.width = canvas.width;
-      out.height = canvas.height;
-      const oCtx = out.getContext('2d');
-
-      // Podkład: oryginalny czysty nagrobek
-      drawComposite(oCtx);
-
-      // Warstwa AI z miękką maską
-      const softMask = buildFeatheredMask();
-      const aiLayer = document.createElement('canvas');
-      aiLayer.width = canvas.width;
-      aiLayer.height = canvas.height;
-      const aCtx = aiLayer.getContext('2d');
-      aCtx.drawImage(aiImg, 0, 0, canvas.width, canvas.height);
-      aCtx.globalCompositeOperation = 'destination-in';
-      aCtx.drawImage(softMask, 0, 0);
-
-      oCtx.drawImage(aiLayer, 0, 0);
-      return out;
+      return img;
     }
 
     inpaintBtn.addEventListener('click', async () => {
@@ -1074,34 +1084,32 @@
         const W = Math.max(256, Math.round(cw * k / 8) * 8);
         const H = Math.max(256, Math.round(ch * k / 8) * 8);
 
-        setBusy("Generuję realistyczną wizualizację przez Stable Diffusion AI…\nDopasowuję perspektywę i cienie (ok. 20-30 s)");
+        setBusy("Generuję realistyczną wizualizację przez AI…\nIdealnie wygładzam krawędzie i cienie (ok. 20 s)");
 
-        // 1. Czysty obraz bazowy bez żadnych żółtych ramek
         const cleanBaseCanvas = document.createElement('canvas');
         cleanBaseCanvas.width = cw;
         cleanBaseCanvas.height = ch;
         drawComposite(cleanBaseCanvas.getContext('2d'));
 
-        // 2. Miękka, bezszwowa maska
-        const featheredMask = buildFeatheredMask();
+        const apiMask = buildApiMask();
 
-        // 3. Zoptymalizowany prompt eliminujący lewitację i szwy
+        // Ostre negatywne prompty usuwające lewitację
         const positivePrompt = 
-          "(high angle shot, perspective matching:1.2), a heavy realistic glass grave candle lantern sitting firmly flat on a polished grey granite tombstone surface, deep dark ambient occlusion contact shadow directly under base, soft directional daylight cast shadow, glossy reflective polished stone, photorealistic, cinematic natural lighting, 8k resolution";
+          "(masterpiece, high-resolution:1.2), a realistic heavy glass grave candle lantern sitting firmly flat on a stone tombstone, deep dark contact shadow directly underneath, glossy reflections on polished granite, cinematic natural daylight lighting, seamless edge integration";
 
         const negativePrompt = 
-          "floating, hovering, levitating, flying, mismatched angle, front-facing on flat plane, wrong perspective, border, frame, seam, rectangular patch, watermark, text, signature, low quality, blurry, deformed, cartoon";
+          "floating, hovering, levitating, mismatched perspective, wrongly angled, poorly drawn, blur, (text, lettering, watermark, signature:1.5), deformed";
 
-        const aiResult = await callAI(
+        const aiImageResult = await callAI(
           cleanBaseCanvas,
-          featheredMask,
+          apiMask,
           W, H,
           positivePrompt,
           negativePrompt,
-          0.42 // optymalny balans: AI tworzy cienie i perspektywę bez deformacji kształtu
+          0.40 // Delikatniejsza siła - wtapia tylko strukturę i oświetlenie
         );
 
-        resultCanvas = compositeAIRendering(aiResult.img);
+        resultCanvas = compositeAIRendering(aiImageResult);
         render();
         showResultMode();
         clearBusy();
