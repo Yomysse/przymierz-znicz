@@ -106,9 +106,15 @@
     </label>
     <input type="file" id="input-grave" accept="image/*">
 
-    <label class="btn btn-candle" for="input-candle" id="btn-candle-label" style="display: none;">
-      🕯️ 2. Wybierz lub zrób zdjęcie znicza
-    </label>
+    <div id="candle-buttons" style="display: none; gap: 10px;">
+      <label class="btn btn-candle" for="input-candle-camera" style="flex: 1;">
+        📷 2. Zrób zdjęcie znicza
+      </label>
+      <label class="btn btn-candle" for="input-candle" style="flex: 1;">
+        🖼️ 2. Z galerii
+      </label>
+    </div>
+    <input type="file" id="input-candle-camera" accept="image/*" capture="environment">
     <input type="file" id="input-candle" accept="image/*">
   </div>
 
@@ -132,9 +138,13 @@
         <label for="strength-slider">Siła AI (cień/odbicie):</label>
         <input type="range" id="strength-slider" min="0.2" max="0.8" step="0.05" value="0.5">
       </div>
+      <div class="slider-row">
+        <label for="realism-slider">Realizm AI (wtopienie znicza):</label>
+        <input type="range" id="realism-slider" min="0" max="0.7" step="0.05" value="0.4">
+      </div>
     </div>
 
-    <button class="btn btn-ai" id="inpaint-btn">✨ Dopracuj cień i odbicie AI</button>
+    <button class="btn btn-ai" id="inpaint-btn">✨ Fotorealistyczna wizualizacja AI</button>
     <button class="btn btn-undo" id="undo-btn" style="display: none;">↩️ Cofnij AI (wróć do edycji)</button>
     <button class="btn btn-download" id="download-btn">💾 Pobierz zdjęcie</button>
   </div>
@@ -152,7 +162,8 @@
 
     const inputGrave = document.getElementById('input-grave');
     const inputCandle = document.getElementById('input-candle');
-    const btnCandleLabel = document.getElementById('btn-candle-label');
+    const candleButtons = document.getElementById('candle-buttons');
+    const inputCandleCamera = document.getElementById('input-candle-camera');
     const editControls = document.getElementById('edit-controls');
     const slidersBox = document.getElementById('sliders');
     const inpaintBtn = document.getElementById('inpaint-btn');
@@ -162,6 +173,7 @@
     const scaleSlider = document.getElementById('scale-slider');
     const reflectSlider = document.getElementById('reflect-slider');
     const strengthSlider = document.getElementById('strength-slider');
+    const realismSlider = document.getElementById('realism-slider');
 
     let graveCanvas = null;   // czyste zdjęcie nagrobka
     let candleCut = null;     // wycięty znicz (canvas z przezroczystością, przycięty)
@@ -203,7 +215,7 @@
         editControls.style.display = 'none';
         render();
 
-        btnCandleLabel.style.display = 'block';
+        candleButtons.style.display = 'flex';
         statusEl.innerText = "Nagrobek wczytany! Teraz dodaj zdjęcie znicza.";
       } catch (err) {
         statusEl.innerText = "Błąd: " + err.message;
@@ -248,7 +260,7 @@
       return out;
     }
 
-    inputCandle.addEventListener('change', async (e) => {
+    async function handleCandleFile(e) {
       const file = e.target.files[0];
       if (!file || !graveCanvas) return;
 
@@ -279,6 +291,7 @@
         full.height = cutImg.naturalHeight;
         full.getContext('2d').drawImage(cutImg, 0, 0);
         candleCut = cropToAlpha(full);
+        harmonizeCandle(candleCut);
 
         // Rozmiar startowy: znicz ok. 25% wysokości zdjęcia
         const base = (canvas.height * 0.25) / candleCut.height;
@@ -298,7 +311,44 @@
         console.error(err);
         statusEl.innerText = "Błąd wycinania: " + err.message;
       }
-    });
+    }
+    inputCandle.addEventListener('change', handleCandleFile);
+    inputCandleCamera.addEventListener('change', handleCandleFile);
+
+    // Delikatne dopasowanie balansu bieli znicza do zdjęcia nagrobka (bez zmiany wyglądu)
+    function harmonizeCandle(c) {
+      const sc = document.createElement('canvas');
+      sc.width = sc.height = 32;
+      const sctx = sc.getContext('2d');
+      sctx.drawImage(graveCanvas, 0, 0, 32, 32);
+      const sd = sctx.getImageData(0, 0, 32, 32).data;
+      let sr = 0, sg = 0, sb = 0;
+      for (let i = 0; i < sd.length; i += 4) { sr += sd[i]; sg += sd[i + 1]; sb += sd[i + 2]; }
+      const n = sd.length / 4;
+      sr /= n; sg /= n; sb /= n;
+      const sL = (sr + sg + sb) / 3 || 1;
+
+      const cc = c.getContext('2d');
+      const id = cc.getImageData(0, 0, c.width, c.height);
+      const d = id.data;
+      let r = 0, g = 0, b = 0, cnt = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] > 200) { r += d[i]; g += d[i + 1]; b += d[i + 2]; cnt++; }
+      }
+      if (!cnt) return;
+      r /= cnt; g /= cnt; b /= cnt;
+      const L = (r + g + b) / 3 || 1;
+
+      const mix = 0.3;
+      const gain = (sc_, c_) => Math.min(1.1, Math.max(0.9, 1 + ((sc_ / sL) / (c_ / L) - 1) * mix));
+      const gr = gain(sr, r), gg = gain(sg, g), gb = gain(sb, b);
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = Math.min(255, d[i] * gr);
+        d[i + 1] = Math.min(255, d[i + 1] * gg);
+        d[i + 2] = Math.min(255, d[i + 2] * gb);
+      }
+      cc.putImageData(id, 0, 0);
+    }
 
     function showEditMode() {
       editControls.style.display = 'flex';
@@ -418,89 +468,152 @@
       return m;
     }
 
-    inpaintBtn.addEventListener('click', async () => {
-      if (!candleCut) return;
+    async function callAI(srcCanvas, maskFull, W, H, prompt, negative, strength) {
+      const aiCanvas = document.createElement('canvas');
+      aiCanvas.width = W;
+      aiCanvas.height = H;
+      aiCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, W, H);
 
-      statusEl.innerText = "⏳ AI dopracowuje cień i odbicie (ok. 10-30 s)...";
-      inpaintBtn.disabled = true;
+      const maskSmall = document.createElement('canvas');
+      maskSmall.width = W;
+      maskSmall.height = H;
+      maskSmall.getContext('2d').drawImage(maskFull, 0, 0, W, H);
 
-      try {
-        const cw = canvas.width, ch = canvas.height;
-        const maskFull = buildMask();
-
-        const k = 512 / Math.max(cw, ch);
-        const W = Math.max(256, Math.round(cw * k / 8) * 8);
-        const H = Math.max(256, Math.round(ch * k / 8) * 8);
-
-        // Obraz dla AI: nagrobek + już wklejony znicz
-        const aiCanvas = document.createElement('canvas');
-        aiCanvas.width = W;
-        aiCanvas.height = H;
-        aiCanvas.getContext('2d').drawImage(canvas, 0, 0, W, H);
-
-        const maskSmall = document.createElement('canvas');
-        maskSmall.width = W;
-        maskSmall.height = H;
-        maskSmall.getContext('2d').drawImage(maskFull, 0, 0, W, H);
-
-        const payload = {
-          prompt: "soft natural shadow and glossy reflection on polished black granite slab, empty stone surface, photorealistic, outdoor daylight",
-          negative_prompt: "candle, lantern, glass, flame, object, text, watermark, blurry, deformed",
+      const res = await fetch(AI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          negative_prompt: negative,
           image: aiCanvas.toDataURL('image/png').split(',')[1],
           mask: maskSmall.toDataURL('image/png').split(',')[1],
           width: W,
           height: H,
-          strength: parseFloat(strengthSlider.value)
-        };
+          strength
+        })
+      });
 
-        const res = await fetch(AI_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const json = await res.json();
+        throw new Error(json.error || 'Nieznany błąd workera');
+      }
+      if (!res.ok) throw new Error(`Błąd HTTP ${res.status}`);
 
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const json = await res.json();
-          throw new Error(json.error || 'Nieznany błąd workera');
+      const img = await loadImage(await res.blob());
+      return { img, maskSmall };
+    }
+
+    // Warstwa AI w pełnej rozdzielczości, widoczna tylko w obszarze maski (razy opacity)
+    function makeLayer(resultImg, maskSmall, opacity) {
+      const cw = canvas.width, ch = canvas.height;
+      const layer = document.createElement('canvas');
+      layer.width = cw;
+      layer.height = ch;
+      const lc = layer.getContext('2d');
+      lc.drawImage(resultImg, 0, 0, cw, ch);
+      const ld = lc.getImageData(0, 0, cw, ch);
+
+      const up = document.createElement('canvas');
+      up.width = cw;
+      up.height = ch;
+      const uc = up.getContext('2d');
+      uc.drawImage(maskSmall, 0, 0, cw, ch);
+      const md = uc.getImageData(0, 0, cw, ch).data;
+      for (let i = 0; i < ld.data.length; i += 4) {
+        ld.data[i + 3] = md[i] * opacity;
+      }
+      lc.putImageData(ld, 0, 0);
+      return layer;
+    }
+
+    // Maska etapu 2: sylwetka znicza (lekko poszerzona) = obszar wtapiania
+    function buildCandleMask() {
+      const cw = canvas.width, ch = canvas.height;
+      const { w, h, x0, y0 } = candleRect();
+
+      const m = document.createElement('canvas');
+      m.width = cw;
+      m.height = ch;
+      const mc = m.getContext('2d');
+      mc.fillStyle = '#000';
+      mc.fillRect(0, 0, cw, ch);
+
+      const sil = document.createElement('canvas');
+      sil.width = Math.ceil(w);
+      sil.height = Math.ceil(h);
+      const sc = sil.getContext('2d');
+      sc.drawImage(candleCut, 0, 0, sil.width, sil.height);
+      sc.globalCompositeOperation = 'source-in';
+      sc.fillStyle = '#fff';
+      sc.fillRect(0, 0, sil.width, sil.height);
+
+      const r = Math.max(4, w * 0.03);
+      mc.drawImage(sil, x0, y0);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        mc.drawImage(sil, x0 + Math.cos(a) * r, y0 + Math.sin(a) * r);
+        mc.drawImage(sil, x0 + Math.cos(a) * r * 0.5, y0 + Math.sin(a) * r * 0.5);
+      }
+      return m;
+    }
+
+    inpaintBtn.addEventListener('click', async () => {
+      if (!candleCut) return;
+      inpaintBtn.disabled = true;
+
+      try {
+        const cw = canvas.width, ch = canvas.height;
+        const k = 512 / Math.max(cw, ch);
+        const W = Math.max(256, Math.round(cw * k / 8) * 8);
+        const H = Math.max(256, Math.round(ch * k / 8) * 8);
+        const realism = parseFloat(realismSlider.value);
+
+        // Etap 1: cień i odbicie pod zniczem (znicz nietknięty)
+        statusEl.innerText = realism > 0
+          ? "⏳ AI (1/2): cień i odbicie w płycie..."
+          : "⏳ AI: cień i odbicie w płycie...";
+        const r1 = await callAI(
+          canvas, buildMask(), W, H,
+          "soft natural shadow and glossy reflection on polished black granite slab, empty stone surface, photorealistic, outdoor daylight",
+          "candle, lantern, glass, flame, object, text, watermark, blurry, deformed",
+          parseFloat(strengthSlider.value)
+        );
+        const layer1 = makeLayer(r1.img, r1.maskSmall, 1);
+
+        const stage1 = document.createElement('canvas');
+        stage1.width = cw;
+        stage1.height = ch;
+        const s1 = stage1.getContext('2d');
+        drawComposite(s1);
+        s1.drawImage(layer1, 0, 0);
+        drawCandlePlain(s1);
+
+        let final = stage1;
+
+        // Etap 2: delikatne wtopienie znicza w oświetlenie sceny (mieszane z oryginałem)
+        if (realism > 0) {
+          statusEl.innerText = "⏳ AI (2/2): wtapianie znicza w scenę...";
+          const r2 = await callAI(
+            stage1, buildCandleMask(), W, H,
+            "realistic glass grave candle lantern on a black granite tombstone in a cemetery, natural outdoor daylight, consistent lighting, photorealistic, same object",
+            "different object, deformed, extra objects, text, watermark, blurry",
+            0.35
+          );
+          const layer2 = makeLayer(r2.img, r2.maskSmall, realism);
+
+          final = document.createElement('canvas');
+          final.width = cw;
+          final.height = ch;
+          const fc = final.getContext('2d');
+          fc.drawImage(stage1, 0, 0);
+          fc.drawImage(layer2, 0, 0);
         }
-        if (!res.ok) throw new Error(`Błąd HTTP ${res.status}`);
-
-        const resultBlob = await res.blob();
-        const resultImg = await loadImage(resultBlob);
-
-        // Warstwa AI w pełnej rozdzielczości, widoczna tylko w strefie maski
-        const layer = document.createElement('canvas');
-        layer.width = cw;
-        layer.height = ch;
-        const lc = layer.getContext('2d');
-        lc.drawImage(resultImg, 0, 0, cw, ch);
-        const ld = lc.getImageData(0, 0, cw, ch);
-
-        const up = document.createElement('canvas');
-        up.width = cw;
-        up.height = ch;
-        const uc = up.getContext('2d');
-        uc.drawImage(maskSmall, 0, 0, cw, ch);
-        const md = uc.getImageData(0, 0, cw, ch).data;
-        for (let i = 0; i < ld.data.length; i += 4) {
-          ld.data[i + 3] = md[i];
-        }
-        lc.putImageData(ld, 0, 0);
-
-        // Wynik: kompozycja + warstwa AI + oryginalny znicz na wierzchu
-        const final = document.createElement('canvas');
-        final.width = cw;
-        final.height = ch;
-        const fc = final.getContext('2d');
-        drawComposite(fc);
-        fc.drawImage(layer, 0, 0);
-        drawCandlePlain(fc);
 
         resultCanvas = final;
         render();
         showResultMode();
-        statusEl.innerText = "✨ Gotowe! Znicz jest oryginalny, AI dopracowało tylko cień i odbicie.";
+        statusEl.innerText = "✨ Gotowe! Możesz pobrać zdjęcie albo cofnąć AI i zmienić ustawienia.";
       } catch (err) {
         console.error("Błąd AI:", err);
         statusEl.innerText = "Błąd AI: " + err.message;
