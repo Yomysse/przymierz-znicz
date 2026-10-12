@@ -6,6 +6,7 @@
   <title>Wizualizator Znicza</title>
 
   <style>
+    :root { --bar-h: 0px; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -54,12 +55,13 @@
       display: block;
     }
     .btn-row .btn { flex: 1; }
+    .btn-row .btn.wide { flex: 2; }
     .btn:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
     .btn:active:not(:disabled) { transform: scale(0.98); }
     .btn-grave { background: #7c3aed; }
     .btn-candle { background: #0284c7; }
-    .btn-ai { background: #9333ea; font-size: 1.1rem; padding: 18px 12px; }
-    .btn-download { background: #16a34a; font-size: 1.1rem; padding: 18px 12px; }
+    .btn-ai { background: #9333ea; }
+    .btn-download { background: #16a34a; }
     .btn-undo { background: #475569; }
 
     input[type="file"] { display: none; }
@@ -67,7 +69,7 @@
     #status {
       font-size: 0.95rem;
       color: #cbd5e1;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       min-height: 22px;
       text-align: center;
       word-break: break-word;
@@ -78,17 +80,16 @@
     #status.error { color: #fca5a5; }
 
     #canvas-container {
-      width: 100%;
-      max-width: 440px;
+      --ar: 0.75;
+      width: min(100%, 440px, max(200px, calc(var(--ar) * (100vh - var(--bar-h) - 120px))));
       aspect-ratio: 3 / 4;
       background: #1e293b;
       border: 2px dashed #334155;
       border-radius: 14px;
       overflow: hidden;
       position: relative;
-      touch-action: none;
     }
-    canvas { width: 100%; height: 100%; display: block; }
+    canvas { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
 
     .busy {
       position: absolute;
@@ -115,32 +116,86 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .controls {
-      width: 100%;
+    /* Stały panel na dole ekranu */
+    #bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #0b1220;
+      border-top: 1px solid #334155;
+      padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+      z-index: 10;
+      display: none;
+    }
+    .bar-inner {
       max-width: 440px;
-      margin-top: 14px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .chips { display: flex; gap: 8px; align-items: center; justify-content: center; }
+    .chip {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      background: #1e293b;
+      border: 3px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 3px;
+      font-size: 1.6rem;
+      color: #cbd5e1;
+    }
+    .chip img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .chip.selected { border-color: #a78bfa; background: #2e2a5a; }
+    .chip.add { border-style: dashed; }
+
+    .size-row { display: flex; align-items: center; gap: 12px; }
+    .size-row input { flex: 1; accent-color: #7c3aed; height: 32px; }
+    .size-row .small { font-size: 1rem; }
+    .size-row .big { font-size: 1.6rem; }
+    .icon-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      border: none;
+      background: #7f1d1d;
+      color: white;
+      font-size: 1.3rem;
+      cursor: pointer;
+    }
+    #bar .btn { padding: 16px 8px; }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      display: none;
+    }
+    .modal-box {
+      width: 100%;
+      max-width: 400px;
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 18px;
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
-    .size-row {
-      background: #1e293b;
-      border-radius: 12px;
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 0.95rem;
-    }
-    .size-row input { flex: 1; accent-color: #7c3aed; height: 28px; }
-    .size-row .small { font-size: 1rem; }
-    .size-row .big { font-size: 1.5rem; }
   </style>
 </head>
 <body>
 
   <h1>🕯️ Wizualizator Znicza</h1>
-  <p class="subtitle">Zobacz, jak wybrany znicz będzie wyglądał na grobie, zanim go kupisz.</p>
+  <p class="subtitle">Zobacz, jak wybrane znicze będą wyglądały na grobie, zanim je kupisz.</p>
 
   <div class="card">
     <div class="card-title">Krok 1. Zdjęcie nagrobka</div>
@@ -172,16 +227,40 @@
     </div>
   </div>
 
-  <div class="controls" id="edit-controls" style="display: none;">
-    <div class="size-row" id="size-row">
-      <span class="small">🕯️</span>
-      <input type="range" id="scale-slider" min="0.05" max="1.5" step="0.01" value="0.3" aria-label="Wielkość znicza">
-      <span class="big">🕯️</span>
-    </div>
+  <!-- Stały panel na dole -->
+  <div id="bar">
+    <div class="bar-inner">
+      <div class="chips" id="row-chips"></div>
 
-    <button class="btn btn-ai" id="inpaint-btn">✨ Pokaż realistyczną wizualizację</button>
-    <button class="btn btn-undo" id="undo-btn" style="display: none;">↩️ Popraw ustawienie znicza</button>
-    <button class="btn btn-download" id="download-btn">💾 Zapisz zdjęcie</button>
+      <div class="size-row" id="row-size">
+        <span class="small">🕯️</span>
+        <input type="range" id="scale-slider" min="0.05" max="1.5" step="0.01" value="0.3" aria-label="Wielkość znicza">
+        <span class="big">🕯️</span>
+        <button class="icon-btn" id="delete-btn" aria-label="Usuń wybrany znicz" style="display: none;">🗑️</button>
+      </div>
+
+      <div class="btn-row" id="row-edit-btns">
+        <button class="btn btn-ai wide" id="inpaint-btn">✨ Pokaż wizualizację</button>
+        <button class="btn btn-download" id="download-btn">💾 Zapisz</button>
+      </div>
+
+      <div class="btn-row" id="row-result-btns" style="display: none;">
+        <button class="btn btn-download wide" id="download-result-btn">💾 Zapisz zdjęcie</button>
+        <button class="btn btn-undo" id="undo-btn">↩️ Popraw</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wybór sposobu dodania kolejnego znicza -->
+  <div class="modal" id="add-modal">
+    <div class="modal-box">
+      <div class="card-title">Dodaj kolejny znicz</div>
+      <div class="btn-row">
+        <label class="btn btn-candle" for="input-candle-camera" id="modal-camera">📷 Zrób zdjęcie</label>
+        <label class="btn btn-candle" for="input-candle" id="modal-gallery">🖼️ Z galerii</label>
+      </div>
+      <button class="btn btn-undo" id="modal-cancel">Anuluj</button>
+    </div>
   </div>
 
   <script>
@@ -189,6 +268,8 @@
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
     const MAX_CANDLE = 1024;
+    const MAX_CANDLES = 3;
+    const START_X = [0.5, 0.28, 0.72];
 
     const statusEl = document.getElementById('status');
     const container = document.getElementById('canvas-container');
@@ -202,18 +283,26 @@
     const inputCandle = document.getElementById('input-candle');
     const inputCandleCamera = document.getElementById('input-candle-camera');
     const stepCandle = document.getElementById('step-candle');
-    const editControls = document.getElementById('edit-controls');
-    const sizeRow = document.getElementById('size-row');
+
+    const bar = document.getElementById('bar');
+    const rowChips = document.getElementById('row-chips');
+    const rowSize = document.getElementById('row-size');
+    const rowEditBtns = document.getElementById('row-edit-btns');
+    const rowResultBtns = document.getElementById('row-result-btns');
+    const scaleSlider = document.getElementById('scale-slider');
+    const deleteBtn = document.getElementById('delete-btn');
     const inpaintBtn = document.getElementById('inpaint-btn');
     const undoBtn = document.getElementById('undo-btn');
     const downloadBtn = document.getElementById('download-btn');
-    const scaleSlider = document.getElementById('scale-slider');
+    const downloadResultBtn = document.getElementById('download-result-btn');
 
-    let graveCanvas = null;   // czyste zdjęcie nagrobka
-    let candleCut = null;     // wycięty znicz
-    let resultCanvas = null;  // wynik po AI
+    const addModal = document.getElementById('add-modal');
 
-    const state = { x: 0, y: 0, scale: 0.3, reflect: 0.15, isDragging: false };
+    let graveCanvas = null;
+    let candles = [];       // {cut, base, scale, x, y, reflect, thumb}
+    let selected = -1;
+    let resultCanvas = null;
+    let drag = { active: false, dx: 0, dy: 0 };
 
     // ---------- Pomocnicze UI ----------
     function setStatus(msg, isError = false) {
@@ -225,6 +314,21 @@
       busyEl.style.display = 'flex';
     }
     function clearBusy() { busyEl.style.display = 'none'; }
+
+    function fitBar() {
+      if (bar.style.display === 'none' || !bar.style.display) return;
+      const h = bar.offsetHeight;
+      document.documentElement.style.setProperty('--bar-h', h + 'px');
+      document.body.style.paddingBottom = (h + 16) + 'px';
+    }
+    function hideBar() {
+      bar.style.display = 'none';
+      document.documentElement.style.setProperty('--bar-h', '0px');
+      document.body.style.paddingBottom = '32px';
+    }
+    function focusStage() {
+      setTimeout(() => statusEl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    }
 
     function loadImage(file) {
       return new Promise((resolve, reject) => {
@@ -254,10 +358,12 @@
         canvas.width = w;
         canvas.height = h;
         container.style.aspectRatio = `${w} / ${h}`;
+        container.style.setProperty('--ar', (w / h).toString());
 
-        candleCut = null;
+        candles = [];
+        selected = -1;
         resultCanvas = null;
-        editControls.style.display = 'none';
+        hideBar();
         render();
 
         stepCandle.style.display = 'block';
@@ -343,9 +449,22 @@
       cc.putImageData(id, 0, 0);
     }
 
+    function makeThumb(cut) {
+      const t = document.createElement('canvas');
+      t.height = 64;
+      t.width = Math.max(24, Math.round(cut.width * 64 / cut.height));
+      t.getContext('2d').drawImage(cut, 0, 0, t.width, t.height);
+      return t.toDataURL('image/png');
+    }
+
     async function handleCandleFile(e) {
       const file = e.target.files[0];
       if (!file || !graveCanvas) return;
+      if (candles.length >= MAX_CANDLES) {
+        setStatus(`Możesz dodać maksymalnie ${MAX_CANDLES} znicze.`, true);
+        e.target.value = '';
+        return;
+      }
 
       let removeBackground;
       try {
@@ -376,25 +495,28 @@
         full.width = cutImg.naturalWidth;
         full.height = cutImg.naturalHeight;
         full.getContext('2d').drawImage(cutImg, 0, 0);
-        candleCut = cropToAlpha(full);
-        harmonizeCandle(candleCut);
+        const cut = cropToAlpha(full);
+        harmonizeCandle(cut);
 
-        // Rozmiar startowy: znicz ok. 25% wysokości zdjęcia
-        const base = (canvas.height * 0.25) / candleCut.height;
-        state.scale = base;
-        scaleSlider.min = base * 0.3;
-        scaleSlider.max = base * 3;
-        scaleSlider.step = base / 50;
-        scaleSlider.value = base;
-        state.x = canvas.width / 2;
-        state.y = canvas.height * 0.65;
-
+        const base = (canvas.height * 0.25) / cut.height;
+        const c = {
+          cut,
+          base,
+          scale: base,
+          x: canvas.width * START_X[candles.length],
+          y: canvas.height * 0.65,
+          reflect: 0.15,
+          thumb: makeThumb(cut)
+        };
+        candles.push(c);
         resultCanvas = null;
-        updateReflect();
+        stepCandle.style.display = 'none';
+        updateReflect(c);
+        selectCandle(candles.length - 1);
         showEditMode();
-        render();
         clearBusy();
-        setStatus("Przesuń znicz palcem w wybrane miejsce i ustaw jego wielkość suwakiem.");
+        setStatus("Dotknij znicza i przesuń go palcem. Zdjęcie możesz przewijać, dotykając poza zniczem.");
+        focusStage();
       } catch (err) {
         console.error(err);
         clearBusy();
@@ -405,24 +527,82 @@
     inputCandle.addEventListener('change', handleCandleFile);
     inputCandleCamera.addEventListener('change', handleCandleFile);
 
+    // ---------- Wybór i panel znicza ----------
+    function selectCandle(i) {
+      selected = i;
+      const c = candles[i];
+      if (!c) return;
+      scaleSlider.min = c.base * 0.3;
+      scaleSlider.max = c.base * 3;
+      scaleSlider.step = c.base / 50;
+      scaleSlider.value = c.scale;
+      renderChips();
+      render();
+    }
+
+    function renderChips() {
+      rowChips.innerHTML = '';
+      candles.forEach((c, i) => {
+        const b = document.createElement('button');
+        b.className = 'chip' + (i === selected ? ' selected' : '');
+        b.setAttribute('aria-label', 'Znicz ' + (i + 1));
+        const im = document.createElement('img');
+        im.src = c.thumb;
+        b.appendChild(im);
+        b.addEventListener('click', () => selectCandle(i));
+        rowChips.appendChild(b);
+      });
+      if (candles.length < MAX_CANDLES) {
+        const add = document.createElement('button');
+        add.className = 'chip add';
+        add.innerText = '➕';
+        add.setAttribute('aria-label', 'Dodaj kolejny znicz');
+        add.addEventListener('click', () => { addModal.style.display = 'flex'; });
+        rowChips.appendChild(add);
+      }
+      deleteBtn.style.display = candles.length > 1 ? 'block' : 'none';
+      fitBar();
+    }
+
     function showEditMode() {
-      editControls.style.display = 'flex';
-      sizeRow.style.display = 'flex';
-      inpaintBtn.style.display = 'block';
-      undoBtn.style.display = 'none';
+      bar.style.display = 'block';
+      rowChips.style.display = 'flex';
+      rowSize.style.display = 'flex';
+      rowEditBtns.style.display = 'flex';
+      rowResultBtns.style.display = 'none';
+      renderChips();
+      fitBar();
     }
 
     function showResultMode() {
-      sizeRow.style.display = 'none';
-      inpaintBtn.style.display = 'none';
-      undoBtn.style.display = 'block';
+      rowChips.style.display = 'none';
+      rowSize.style.display = 'none';
+      rowEditBtns.style.display = 'none';
+      rowResultBtns.style.display = 'flex';
+      fitBar();
     }
 
+    for (const id of ['modal-camera', 'modal-gallery']) {
+      document.getElementById(id).addEventListener('click', () => { addModal.style.display = 'none'; });
+    }
+    document.getElementById('modal-cancel').addEventListener('click', () => { addModal.style.display = 'none'; });
+
+    deleteBtn.addEventListener('click', () => {
+      if (candles.length <= 1 || selected < 0) return;
+      candles.splice(selected, 1);
+      selectCandle(Math.min(selected, candles.length - 1));
+    });
+
     // ---------- Automatyczny dobór ustawień ----------
-    // Analiza powierzchni pod zniczem: ciemna i gładka płyta = mocne odbicie,
-    // jasna lub chropowata (żwir, jasny kamień) = słabe odbicie.
-    function surfaceInfo() {
-      const { w, h, x0, y0 } = candleRect();
+    function candleRect(c) {
+      const w = c.cut.width * c.scale;
+      const h = c.cut.height * c.scale;
+      return { w, h, x0: c.x - w / 2, y0: c.y - h / 2 };
+    }
+
+    // Ciemna i gładka płyta = mocne odbicie; jasna lub chropowata = słabe
+    function surfaceInfo(c) {
+      const { w, h, x0, y0 } = candleRect(c);
       const sx = Math.max(0, Math.round(x0));
       const sy = Math.max(0, Math.round(y0 + h * 0.95));
       const sw = Math.min(graveCanvas.width - sx, Math.round(w));
@@ -447,46 +627,53 @@
       return { mean, std };
     }
 
-    function updateReflect() {
-      if (!candleCut || !graveCanvas) return;
-      const info = surfaceInfo();
-      if (!info) { state.reflect = 0.15; return; }
-      if (info.mean < 80 && info.std < 22) state.reflect = 0.3;
-      else if (info.mean < 110 && info.std < 32) state.reflect = 0.18;
-      else state.reflect = 0.06;
+    function updateReflect(c) {
+      if (!c || !graveCanvas) return;
+      const info = surfaceInfo(c);
+      if (!info) { c.reflect = 0.15; return; }
+      if (info.mean < 80 && info.std < 22) c.reflect = 0.3;
+      else if (info.mean < 110 && info.std < 32) c.reflect = 0.18;
+      else c.reflect = 0.06;
     }
 
     function autoSettings() {
-      const info = surfaceInfo();
-      const polished = info && info.mean < 90 && info.std < 25;
-      const { h } = candleRect();
+      let polishedCount = 0;
+      let minH = Infinity;
       const k = 512 / Math.max(canvas.width, canvas.height);
-      const hAI = h * k;
+      for (const c of candles) {
+        const info = surfaceInfo(c);
+        if (info && info.mean < 90 && info.std < 25) polishedCount++;
+        minH = Math.min(minH, candleRect(c).h * k);
+      }
+      const polished = polishedCount * 2 >= candles.length;
       return {
         shadowStrength: polished ? 0.5 : 0.4,
-        // mały znicz w kadrze traci detale przy 512 px, więc mniej AI
-        realism: hAI < 80 ? 0.2 : 0.35
+        realism: minH < 80 ? 0.2 : 0.35
       };
     }
 
     // ---------- Rysowanie (realistyczne wklejenie bez AI) ----------
-    function candleRect() {
-      const w = candleCut.width * state.scale;
-      const h = candleCut.height * state.scale;
-      return { w, h, x0: state.x - w / 2, y0: state.y - h / 2 };
+    function drawOrder() {
+      // niżej na zdjęciu = bliżej obserwatora = rysowane później (na wierzchu)
+      return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
     }
 
-    function drawCandlePlain(c) {
-      const { w, h, x0, y0 } = candleRect();
-      c.drawImage(candleCut, x0, y0, w, h);
+    function drawCandlesPlain(c) {
+      for (const cd of drawOrder()) {
+        const { w, h, x0, y0 } = candleRect(cd);
+        c.drawImage(cd.cut, x0, y0, w, h);
+      }
     }
 
     function drawComposite(c) {
       c.drawImage(graveCanvas, 0, 0);
-      if (!candleCut) return;
-      const { w, h, x0, y0 } = candleRect();
+      if (!candles.length) return;
+      const order = drawOrder();
 
-      if (state.reflect > 0) {
+      // Odbicia
+      for (const cd of order) {
+        if (cd.reflect <= 0) continue;
+        const { w, h, x0, y0 } = candleRect(cd);
         const rh = Math.max(2, Math.round(h * 0.5));
         const refl = document.createElement('canvas');
         refl.width = Math.max(2, Math.round(w));
@@ -494,34 +681,56 @@
         const rc = refl.getContext('2d');
         rc.translate(0, h);
         rc.scale(1, -1);
-        rc.drawImage(candleCut, 0, 0, w, h);
+        rc.drawImage(cd.cut, 0, 0, w, h);
         rc.setTransform(1, 0, 0, 1, 0, 0);
         rc.globalCompositeOperation = 'destination-in';
         const g = rc.createLinearGradient(0, 0, 0, rh);
-        g.addColorStop(0, `rgba(0,0,0,${state.reflect})`);
+        g.addColorStop(0, `rgba(0,0,0,${cd.reflect})`);
         g.addColorStop(1, 'rgba(0,0,0,0)');
         rc.fillStyle = g;
         rc.fillRect(0, 0, refl.width, rh);
         c.drawImage(refl, x0, y0 + h);
       }
 
-      c.save();
-      c.translate(state.x, y0 + h);
-      c.scale(1, 0.22);
-      const rw = w * 0.8;
-      const rg = c.createRadialGradient(0, 0, 0, 0, 0, rw);
-      rg.addColorStop(0, 'rgba(0,0,0,0.7)');
-      rg.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = rg;
-      c.fillRect(-rw, -rw, rw * 2, rw * 2);
-      c.restore();
+      // Cienie kontaktowe
+      for (const cd of order) {
+        const { w, h, y0 } = candleRect(cd);
+        c.save();
+        c.translate(cd.x, y0 + h);
+        c.scale(1, 0.22);
+        const rw = w * 0.8;
+        const rg = c.createRadialGradient(0, 0, 0, 0, 0, rw);
+        rg.addColorStop(0, 'rgba(0,0,0,0.7)');
+        rg.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = rg;
+        c.fillRect(-rw, -rw, rw * 2, rw * 2);
+        c.restore();
+      }
 
+      // Znicze z miękkim cieniem
+      for (const cd of order) {
+        const { w, h, x0, y0 } = candleRect(cd);
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,0.45)';
+        c.shadowBlur = w * 0.06;
+        c.shadowOffsetX = w * 0.04;
+        c.shadowOffsetY = h * 0.01;
+        c.drawImage(cd.cut, x0, y0, w, h);
+        c.restore();
+      }
+    }
+
+    function drawSelection(c) {
+      const cd = candles[selected];
+      if (!cd) return;
+      const { w, h, x0, y0 } = candleRect(cd);
+      const lw = Math.max(2, canvas.width * 0.006);
+      const pad = lw * 3;
       c.save();
-      c.shadowColor = 'rgba(0,0,0,0.45)';
-      c.shadowBlur = w * 0.06;
-      c.shadowOffsetX = w * 0.04;
-      c.shadowOffsetY = h * 0.01;
-      c.drawImage(candleCut, x0, y0, w, h);
+      c.lineWidth = lw;
+      c.strokeStyle = '#a78bfa';
+      c.setLineDash([lw * 3, lw * 2]);
+      c.strokeRect(x0 - pad, y0 - pad, w + pad * 2, h + pad * 2);
       c.restore();
     }
 
@@ -531,70 +740,66 @@
         ctx.drawImage(resultCanvas, 0, 0);
       } else if (graveCanvas) {
         drawComposite(ctx);
+        if (candles.length) drawSelection(ctx);
       }
     }
 
     // ---------- 3. AI ----------
-    function buildMask() {
-      const cw = canvas.width, ch = canvas.height;
-      const { w, h, x0, y0 } = candleRect();
-
-      const m = document.createElement('canvas');
-      m.width = cw;
-      m.height = ch;
-      const mc = m.getContext('2d');
-      mc.fillStyle = '#000';
-      mc.fillRect(0, 0, cw, ch);
-
-      const pad = w * 0.4;
-      mc.fillStyle = '#fff';
-      mc.fillRect(x0 - pad, y0 + h * 0.6, w + pad * 2, h * 0.4 + h * 0.5);
-
+    function silhouetteOf(cd, color) {
+      const { w, h } = candleRect(cd);
       const sil = document.createElement('canvas');
       sil.width = Math.ceil(w);
       sil.height = Math.ceil(h);
       const sc = sil.getContext('2d');
-      sc.drawImage(candleCut, 0, 0, sil.width, sil.height);
+      sc.drawImage(cd.cut, 0, 0, sil.width, sil.height);
       sc.globalCompositeOperation = 'source-in';
-      sc.fillStyle = '#000';
+      sc.fillStyle = color;
       sc.fillRect(0, 0, sil.width, sil.height);
+      return sil;
+    }
 
-      const r = Math.max(3, w * 0.02);
+    function drawDilated(mc, sil, x0, y0, r) {
       mc.drawImage(sil, x0, y0);
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
         mc.drawImage(sil, x0 + Math.cos(a) * r, y0 + Math.sin(a) * r);
         mc.drawImage(sil, x0 + Math.cos(a) * r * 0.5, y0 + Math.sin(a) * r * 0.5);
       }
+    }
+
+    // Maska etapu 1: cień i odbicie pod zniczami (znicze zostają czarne = nietknięte)
+    function buildMask() {
+      const m = document.createElement('canvas');
+      m.width = canvas.width;
+      m.height = canvas.height;
+      const mc = m.getContext('2d');
+      mc.fillStyle = '#000';
+      mc.fillRect(0, 0, m.width, m.height);
+
+      mc.fillStyle = '#fff';
+      for (const cd of candles) {
+        const { w, h, x0, y0 } = candleRect(cd);
+        const pad = w * 0.4;
+        mc.fillRect(x0 - pad, y0 + h * 0.6, w + pad * 2, h * 0.4 + h * 0.5);
+      }
+      for (const cd of candles) {
+        const { w, x0, y0 } = candleRect(cd);
+        drawDilated(mc, silhouetteOf(cd, '#000'), x0, y0, Math.max(3, w * 0.02));
+      }
       return m;
     }
 
+    // Maska etapu 2: sylwetki zniczy (lekko poszerzone)
     function buildCandleMask() {
-      const cw = canvas.width, ch = canvas.height;
-      const { w, h, x0, y0 } = candleRect();
-
       const m = document.createElement('canvas');
-      m.width = cw;
-      m.height = ch;
+      m.width = canvas.width;
+      m.height = canvas.height;
       const mc = m.getContext('2d');
       mc.fillStyle = '#000';
-      mc.fillRect(0, 0, cw, ch);
-
-      const sil = document.createElement('canvas');
-      sil.width = Math.ceil(w);
-      sil.height = Math.ceil(h);
-      const sc = sil.getContext('2d');
-      sc.drawImage(candleCut, 0, 0, sil.width, sil.height);
-      sc.globalCompositeOperation = 'source-in';
-      sc.fillStyle = '#fff';
-      sc.fillRect(0, 0, sil.width, sil.height);
-
-      const r = Math.max(4, w * 0.03);
-      mc.drawImage(sil, x0, y0);
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        mc.drawImage(sil, x0 + Math.cos(a) * r, y0 + Math.sin(a) * r);
-        mc.drawImage(sil, x0 + Math.cos(a) * r * 0.5, y0 + Math.sin(a) * r * 0.5);
+      mc.fillRect(0, 0, m.width, m.height);
+      for (const cd of candles) {
+        const { w, x0, y0 } = candleRect(cd);
+        drawDilated(mc, silhouetteOf(cd, '#fff'), x0, y0, Math.max(4, w * 0.03));
       }
       return m;
     }
@@ -635,8 +840,8 @@
       return { img, maskSmall, aiCanvas };
     }
 
-    // Średnia różnica (0-255) między obrazem wejściowym a wynikiem AI w obszarze maski.
-    // Duża różnica = AI zbyt mocno zmieniło obszar (ryzyko halucynacji).
+    // Średnia różnica (0-255) między wejściem a wynikiem AI w obszarze maski.
+    // Duża różnica = ryzyko halucynacji.
     function maskDiff(aiCanvas, resultImg, maskSmall, W, H) {
       const t = document.createElement('canvas');
       t.width = W;
@@ -679,8 +884,9 @@
     }
 
     inpaintBtn.addEventListener('click', async () => {
-      if (!candleCut) return;
+      if (!candles.length) return;
       inpaintBtn.disabled = true;
+      const many = candles.length > 1;
 
       try {
         const cw = canvas.width, ch = canvas.height;
@@ -689,11 +895,11 @@
         const H = Math.max(256, Math.round(ch * k / 8) * 8);
         const auto = autoSettings();
 
-        // Etap 1: cień i odbicie pod zniczem (znicz nietknięty)
+        // Etap 1: cień i odbicie pod zniczami
         setBusy("Tworzę realistyczną wizualizację…\nDopasowuję cień i odbicie (ok. 30 s)");
         const r1 = await callAI(
           canvas, buildMask(), W, H,
-          "soft natural shadow and glossy reflection on polished black granite slab, empty stone surface, photorealistic, outdoor daylight",
+          "soft natural shadows and glossy reflections on polished black granite slab, empty stone surface, photorealistic, outdoor daylight",
           "candle, lantern, glass, flame, object, text, watermark, blurry, deformed",
           auto.shadowStrength
         );
@@ -707,15 +913,15 @@
         const s1 = stage1.getContext('2d');
         drawComposite(s1);
         s1.drawImage(layer1, 0, 0);
-        drawCandlePlain(s1);
+        drawCandlesPlain(s1);
 
         let final = stage1;
 
-        // Etap 2: wtopienie znicza w światło sceny, z automatyczną kontrolą halucynacji
-        setBusy("Tworzę realistyczną wizualizację…\nWtapiam znicz w scenę");
+        // Etap 2: wtopienie zniczy w światło sceny z kontrolą halucynacji
+        setBusy("Tworzę realistyczną wizualizację…\n" + (many ? "Wtapiam znicze w scenę" : "Wtapiam znicz w scenę"));
         const r2 = await callAI(
           stage1, buildCandleMask(), W, H,
-          "realistic glass grave candle lantern on a black granite tombstone in a cemetery, natural outdoor daylight, consistent lighting, photorealistic, same object",
+          "realistic glass grave candle lanterns on a black granite tombstone in a cemetery, natural outdoor daylight, consistent lighting, photorealistic, same objects",
           "different object, deformed, extra objects, text, watermark, blurry",
           0.35
         );
@@ -736,7 +942,8 @@
         render();
         showResultMode();
         clearBusy();
-        setStatus("✨ Gotowe! Zapisz zdjęcie albo popraw ustawienie znicza.");
+        setStatus("✨ Gotowe! Zapisz zdjęcie albo popraw ustawienie zniczy.");
+        focusStage();
       } catch (err) {
         console.error("Błąd AI:", err);
         clearBusy();
@@ -749,79 +956,104 @@
       resultCanvas = null;
       showEditMode();
       render();
-      setStatus("Przesuń znicz w inne miejsce lub zmień jego wielkość.");
+      setStatus("Dotknij znicza i przesuń go palcem albo zmień jego wielkość.");
     });
 
     scaleSlider.addEventListener('input', (e) => {
-      state.scale = parseFloat(e.target.value);
-      updateReflect();
+      const c = candles[selected];
+      if (!c) return;
+      c.scale = parseFloat(e.target.value);
+      updateReflect(c);
       render();
     });
 
-    // ---------- Przesuwanie ----------
+    // ---------- Przesuwanie: tylko po dotknięciu znicza, reszta zdjęcia się przewija ----------
     function getCoords(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
-      return {
-        x: (clientX - rect.left) * (canvas.width / rect.width),
-        y: (clientY - rect.top) * (canvas.height / rect.height)
-      };
+      const f = canvas.width / rect.width;
+      return { x: (clientX - rect.left) * f, y: (clientY - rect.top) * f, f };
     }
 
-    function canDrag() { return candleCut && !resultCanvas; }
+    function hitTest(pos) {
+      const pad = 24 * pos.f; // zapas na palec
+      const order = candles
+        .map((c, i) => ({ c, i, bottom: c.y + candleRect(c).h / 2 }))
+        .sort((a, b) => b.bottom - a.bottom); // wierzchni pierwszy
+      for (const { c, i } of order) {
+        const { w, h, x0, y0 } = candleRect(c);
+        if (pos.x >= x0 - pad && pos.x <= x0 + w + pad && pos.y >= y0 - pad && pos.y <= y0 + h + pad) return i;
+      }
+      return -1;
+    }
+
+    function canDrag() { return candles.length > 0 && !resultCanvas; }
+
+    function startDrag(pos) {
+      const i = hitTest(pos);
+      if (i < 0) return false;
+      if (i !== selected) selectCandle(i);
+      const c = candles[i];
+      drag = { active: true, dx: c.x - pos.x, dy: c.y - pos.y };
+      return true;
+    }
+
+    function moveDrag(pos) {
+      const c = candles[selected];
+      if (!drag.active || !c) return;
+      c.x = pos.x + drag.dx;
+      c.y = pos.y + drag.dy;
+      render();
+    }
 
     function endDrag() {
-      if (!state.isDragging) return;
-      state.isDragging = false;
-      updateReflect();
+      if (!drag.active) return;
+      drag.active = false;
+      updateReflect(candles[selected]);
       render();
     }
 
     canvas.addEventListener('touchstart', (e) => {
       if (!canDrag()) return;
       const pos = getCoords(e.touches[0].clientX, e.touches[0].clientY);
-      state.isDragging = true;
-      state.x = pos.x;
-      state.y = pos.y;
-      render();
+      if (startDrag(pos)) e.preventDefault(); // blokuje przewijanie tylko gdy dotknięto znicza
     }, { passive: false });
 
     canvas.addEventListener('touchmove', (e) => {
-      if (!state.isDragging) return;
+      if (!drag.active) return;
       e.preventDefault();
-      const pos = getCoords(e.touches[0].clientX, e.touches[0].clientY);
-      state.x = pos.x;
-      state.y = pos.y;
-      render();
+      moveDrag(getCoords(e.touches[0].clientX, e.touches[0].clientY));
     }, { passive: false });
 
     canvas.addEventListener('touchend', endDrag);
+    canvas.addEventListener('touchcancel', endDrag);
 
     canvas.addEventListener('mousedown', (e) => {
       if (!canDrag()) return;
-      const pos = getCoords(e.clientX, e.clientY);
-      state.isDragging = true;
-      state.x = pos.x;
-      state.y = pos.y;
-      render();
+      startDrag(getCoords(e.clientX, e.clientY));
     });
-
     window.addEventListener('mousemove', (e) => {
-      if (!state.isDragging) return;
-      const pos = getCoords(e.clientX, e.clientY);
-      state.x = pos.x;
-      state.y = pos.y;
-      render();
+      if (drag.active) moveDrag(getCoords(e.clientX, e.clientY));
     });
-
     window.addEventListener('mouseup', endDrag);
 
-    // ---------- Zapis ----------
-    downloadBtn.addEventListener('click', () => {
+    // ---------- Zapis (bez ramki zaznaczenia) ----------
+    function save() {
+      let src = resultCanvas;
+      if (!src) {
+        src = document.createElement('canvas');
+        src.width = canvas.width;
+        src.height = canvas.height;
+        drawComposite(src.getContext('2d'));
+      }
       const link = document.createElement('a');
       link.download = 'wizualizacja-nagrobek.jpg';
-      link.href = canvas.toDataURL('image/jpeg', 0.95);
+      link.href = src.toDataURL('image/jpeg', 0.95);
       link.click();
-    });
+    }
+    downloadBtn.addEventListener('click', save);
+    downloadResultBtn.addEventListener('click', save);
+
+    window.addEventListener('resize', fitBar);
   </script>
 </body>
 </html>
