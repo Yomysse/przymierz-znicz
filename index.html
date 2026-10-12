@@ -147,6 +147,11 @@
       border: none;
       color: #f2fff8;
     }
+    .btn-share {
+      background: linear-gradient(180deg, #3b82f6, #2563eb);
+      border: none;
+      color: #fff;
+    }
     .btn-undo { background: rgba(255, 255, 255, 0.05); color: var(--muted); }
 
     input[type="file"] { display: none; }
@@ -212,6 +217,30 @@
     }
     canvas { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
 
+    /* Przełącznik dzień/noc na nagrobku */
+    .night-toggle {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(13, 19, 33, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(245, 194, 107, 0.3);
+      color: white;
+      font-size: 1.4rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 5;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: transform 0.2s, background 0.2s;
+    }
+    .night-toggle:active { transform: scale(0.9); }
+    .night-toggle.active { background: rgba(245, 194, 107, 0.25); border-color: var(--amber); }
+
     .busy {
       position: absolute;
       inset: 0;
@@ -227,6 +256,7 @@
       font-size: 1.05rem;
       line-height: 1.5;
       color: #fbe9c4;
+      z-index: 10;
     }
     #busy-text { white-space: pre-line; }
     .spinner {
@@ -392,6 +422,7 @@
 
   <div id="canvas-container">
     <canvas id="stage"></canvas>
+    <button id="night-toggle" class="night-toggle" aria-label="Przełącz dzień/noc">🌙</button>
     <div class="busy" id="busy" style="display: none;">
       <div class="spinner"></div>
       <div id="busy-text"></div>
@@ -410,13 +441,15 @@
       </div>
 
       <div class="btn-row" id="row-edit-btns">
-        <button class="btn btn-ai wide" id="inpaint-btn">✨ Wygeneruj wizualizację AI</button>
-        <button class="btn btn-download" id="download-btn">💾 Zapisz</button>
+        <button class="btn btn-ai wide" id="inpaint-btn">✨ Pokaż wynik AI</button>
+        <button class="btn btn-download" id="download-btn" aria-label="Zapisz">💾</button>
+        <button class="btn btn-share" id="share-btn" aria-label="Prześlij">📤</button>
       </div>
 
       <div class="btn-row" id="row-result-btns" style="display: none;">
-        <button class="btn btn-download wide" id="download-result-btn">💾 Zapisz zdjęcie</button>
-        <button class="btn btn-undo" id="undo-btn">↩️ Popraw</button>
+        <button class="btn btn-undo wide" id="undo-btn">↩️ Popraw</button>
+        <button class="btn btn-download" id="download-result-btn" aria-label="Zapisz">💾</button>
+        <button class="btn btn-share" id="share-result-btn" aria-label="Prześlij">📤</button>
       </div>
     </div>
   </div>
@@ -446,6 +479,7 @@
     const ctx = canvas.getContext('2d');
     const busyEl = document.getElementById('busy');
     const busyText = document.getElementById('busy-text');
+    const nightToggleBtn = document.getElementById('night-toggle');
 
     const inputGrave = document.getElementById('input-grave');
     const inputGraveCamera = document.getElementById('input-grave-camera');
@@ -465,8 +499,6 @@
     const deleteBtn = document.getElementById('delete-btn');
     const inpaintBtn = document.getElementById('inpaint-btn');
     const undoBtn = document.getElementById('undo-btn');
-    const downloadBtn = document.getElementById('download-btn');
-    const downloadResultBtn = document.getElementById('download-result-btn');
 
     const addModal = document.getElementById('add-modal');
 
@@ -476,6 +508,7 @@
     let resultCanvas = null;
     let drag = { active: false, dx: 0, dy: 0 };
     let advisorGenerated = false;
+    let isNightMode = false;
 
     function setStatus(msg, isError = false) {
       statusEl.innerText = msg;
@@ -512,6 +545,18 @@
       });
     }
 
+    // ---------- PRZEŁĄCZNIK DZIEŃ / NOC ----------
+    nightToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Blokuje przenoszenie kliknięcia na przesuwanie znicza
+      isNightMode = !isNightMode;
+      nightToggleBtn.innerText = isNightMode ? "☀️" : "🌙";
+      nightToggleBtn.classList.toggle('active', isNightMode);
+      render();
+    });
+    // Ochrona przed dotykiem dla urządzeń mobilnych
+    nightToggleBtn.addEventListener('touchstart', e => e.stopPropagation());
+    nightToggleBtn.addEventListener('mousedown', e => e.stopPropagation());
+
     // ---------- 1. Nagrobek ----------
     async function handleGraveFile(e) {
       const file = e.target.files[0];
@@ -535,6 +580,10 @@
         candles = [];
         selected = -1;
         resultCanvas = null;
+        isNightMode = false;
+        nightToggleBtn.innerText = "🌙";
+        nightToggleBtn.classList.remove('active');
+        
         hideBar();
         render();
 
@@ -544,6 +593,7 @@
         advisorBox.style.display = 'none';
         advisorBox.innerHTML = '';
         advisorGenerated = false;
+        nightToggleBtn.style.display = 'flex';
 
         setStatus("Świetnie! Sprawdź rekomendację lub dodaj zdjęcie znicza.");
       } catch (err) {
@@ -676,40 +726,6 @@
       return out;
     }
 
-    function harmonizeCandle(c) {
-      const sc = document.createElement('canvas');
-      sc.width = sc.height = 32;
-      const sctx = sc.getContext('2d');
-      sctx.drawImage(graveCanvas, 0, 0, 32, 32);
-      const sd = sctx.getImageData(0, 0, 32, 32).data;
-      let sr = 0, sg = 0, sb = 0;
-      for (let i = 0; i < sd.length; i += 4) { sr += sd[i]; sg += sd[i + 1]; sb += sd[i + 2]; }
-      const n = sd.length / 4;
-      sr /= n; sg /= n; sb /= n;
-      const sL = (sr + sg + sb) / 3 || 1;
-
-      const cc = c.getContext('2d');
-      const id = cc.getImageData(0, 0, c.width, c.height);
-      const d = id.data;
-      let r = 0, g = 0, b = 0, cnt = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        if (d[i + 3] > 200) { r += d[i]; g += d[i + 1]; b += d[i + 2]; cnt++; }
-      }
-      if (!cnt) return;
-      r /= cnt; g /= cnt; b /= cnt;
-      const L = (r + g + b) / 3 || 1;
-
-      const mix = 0.28;
-      const gain = (s_, c_) => Math.min(1.08, Math.max(0.92, 1 + ((s_ / sL) / (c_ / L) - 1) * mix));
-      const gr = gain(sr, r), gg = gain(sg, g), gb = gain(sb, b);
-      for (let i = 0; i < d.length; i += 4) {
-        d[i] = Math.min(255, d[i] * gr);
-        d[i + 1] = Math.min(255, d[i + 1] * gg);
-        d[i + 2] = Math.min(255, d[i + 2] * gb);
-      }
-      cc.putImageData(id, 0, 0);
-    }
-
     function makeThumb(cut) {
       const t = document.createElement('canvas');
       t.height = 64;
@@ -757,7 +773,6 @@
         full.height = cutImg.naturalHeight;
         full.getContext('2d').drawImage(cutImg, 0, 0);
         const cut = cropToAlpha(full);
-        harmonizeCandle(cut);
 
         const base = (canvas.height * 0.25) / cut.height;
         const c = {
@@ -772,7 +787,6 @@
         candles.push(c);
         resultCanvas = null;
         stepCandle.style.display = 'none';
-        updateReflect(c);
         selectCandle(candles.length - 1);
         showEditMode();
         clearBusy();
@@ -859,41 +873,6 @@
       return { w, h, x0: c.x - w / 2, y0: c.y - h / 2 };
     }
 
-    function surfaceInfo(c) {
-      const { w, h, x0, y0 } = candleRect(c);
-      const sx = Math.max(0, Math.round(x0));
-      const sy = Math.max(0, Math.round(y0 + h * 0.95));
-      const sw = Math.min(graveCanvas.width - sx, Math.round(w));
-      const sh = Math.min(graveCanvas.height - sy, Math.round(h * 0.4));
-      if (sw < 4 || sh < 4) return null;
-
-      const t = document.createElement('canvas');
-      t.width = 48;
-      t.height = 24;
-      const tc = t.getContext('2d');
-      tc.drawImage(graveCanvas, sx, sy, sw, sh, 0, 0, 48, 24);
-      const d = tc.getImageData(0, 0, 48, 24).data;
-      let sum = 0, sum2 = 0;
-      const n = d.length / 4;
-      for (let i = 0; i < d.length; i += 4) {
-        const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        sum += l;
-        sum2 += l * l;
-      }
-      const mean = sum / n;
-      const std = Math.sqrt(Math.max(0, sum2 / n - mean * mean));
-      return { mean, std };
-    }
-
-    function updateReflect(c) {
-      if (!c || !graveCanvas) return;
-      const info = surfaceInfo(c);
-      if (!info) { c.reflect = 0.25; return; }
-      if (info.mean < 80 && info.std < 22) c.reflect = 0.42;
-      else if (info.mean < 120 && info.std < 35) c.reflect = 0.28;
-      else c.reflect = 0.12;
-    }
-
     function drawOrder() {
       return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
     }
@@ -907,13 +886,6 @@
       cCtx.transform(1, 0, -horizRel * 0.045, 0.95 + (vertRel * 0.05), 0, 0);
       cCtx.drawImage(cd.cut, -w / 2, -h, w, h);
       cCtx.restore();
-    }
-
-    function drawCandlesPlain(c) {
-      for (const cd of drawOrder()) {
-        const { w, h, x0, y0 } = candleRect(cd);
-        drawPerspectiveCandle(c, cd, x0, y0, w, h);
-      }
     }
 
     function drawComposite(c) {
@@ -958,25 +930,84 @@
       c.restore();
     }
 
+    // ---------- FUNKCJA APLIKUJĄCA TRYB NOCNY ----------
+    function applyNightMode(cCtx) {
+      cCtx.save();
+      // 1. Zmrok wokół nagrobka
+      cCtx.fillStyle = 'rgba(12, 16, 28, 0.72)';
+      cCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const order = drawOrder();
+      
+      // 2. Odrysowujemy znicze, żeby nie były pod ciemną folią
+      for (const cd of order) {
+        const { w, h, x0, y0 } = candleRect(cd);
+        drawPerspectiveCandle(cCtx, cd, x0, y0, w, h);
+      }
+
+      // 3. Dodajemy spektakularną złotą łunę światła
+      cCtx.globalCompositeOperation = 'screen';
+      for (const cd of order) {
+        const { w, h } = candleRect(cd);
+
+        // Łuna na ziemi
+        const glowRadius = w * 1.8;
+        const groundY = (cd.y + h / 2) + 2;
+        const glowGrad = cCtx.createRadialGradient(cd.x, groundY, w * 0.1, cd.x, groundY, glowRadius);
+        glowGrad.addColorStop(0, 'rgba(255, 170, 40, 0.65)');
+        glowGrad.addColorStop(0.4, 'rgba(220, 100, 10, 0.25)');
+        glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        cCtx.save();
+        cCtx.translate(cd.x, groundY);
+        cCtx.scale(1, 0.4); // perspektywa płaska na ziemi
+        cCtx.fillStyle = glowGrad;
+        cCtx.beginPath();
+        cCtx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        cCtx.fill();
+        cCtx.restore();
+
+        // Łuna wokół samego ognia w zniczu
+        const centerGlowRadius = w * 1.1;
+        const centerY = cd.y - h * 0.1;
+        const cg = cCtx.createRadialGradient(cd.x, centerY, 0, cd.x, centerY, centerGlowRadius);
+        cg.addColorStop(0, 'rgba(255, 200, 80, 0.7)');
+        cg.addColorStop(0.3, 'rgba(255, 120, 0, 0.3)');
+        cg.addColorStop(1, 'rgba(0,0,0,0)');
+        cCtx.fillStyle = cg;
+        cCtx.beginPath();
+        cCtx.arc(cd.x, centerY, centerGlowRadius, 0, Math.PI*2);
+        cCtx.fill();
+      }
+      cCtx.restore();
+    }
+
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (resultCanvas) {
         ctx.drawImage(resultCanvas, 0, 0);
       } else if (graveCanvas) {
         drawComposite(ctx);
-        if (candles.length) drawSelection(ctx);
+      }
+
+      // NAKŁADANIE TRYBU NOCNEGO WIZUALNIE
+      if (isNightMode && candles.length > 0 && graveCanvas) {
+        applyNightMode(ctx);
+      }
+
+      // Ramka wyboru na wierzchu, ale ukryta, gdy mamy gotowy wynik lub tryb nocny
+      if (!resultCanvas && graveCanvas && candles.length && !isNightMode) {
+        drawSelection(ctx);
       }
     }
 
-    // ---------- STABLE DIFFUSION AI W PEŁNI ODSEPAROWANE OD TŁA ----------
-
-    // 1. Maska dla interfejsu API AI (Czarne tło, biały znicz)
+    // ---------- STABLE DIFFUSION AI W PEŁNI ODSEPAROWANE ----------
     function buildApiMask() {
       const m = document.createElement('canvas');
       m.width = canvas.width;
       m.height = canvas.height;
       const mc = m.getContext('2d');
-      mc.fillStyle = '#000000'; // Krytyczny punkt dla API: czarne tło!
+      mc.fillStyle = '#000000'; 
       mc.fillRect(0, 0, m.width, m.height);
 
       mc.fillStyle = '#ffffff';
@@ -993,14 +1024,12 @@
       return m;
     }
 
-    // 2. Maska przezroczysta zabezpieczająca tło zdjęcia w naszej przeglądarce!
     function compositeAIRendering(aiImg) {
       const out = document.createElement('canvas');
       out.width = canvas.width;
       out.height = canvas.height;
       const oCtx = out.getContext('2d');
 
-      // Oryginalny, bezpieczny nagrobek w wysokiej rozdzielczości
       drawComposite(oCtx);
 
       const blendMask = document.createElement('canvas');
@@ -1008,14 +1037,13 @@
       blendMask.height = canvas.height;
       const bCtx = blendMask.getContext('2d');
       
-      // KRYTYCZNY PUNKT: Przezroczyste tło. Dzięki temu tekst z AI nigdy nie trafi na ekran
       bCtx.clearRect(0, 0, canvas.width, canvas.height);
 
       bCtx.fillStyle = '#ffffff';
       for (const cd of candles) {
         const { w, h, x0, y0 } = candleRect(cd);
         bCtx.save();
-        bCtx.filter = 'blur(3px)'; // Miękkie, ale zwarte obrzeże wokół znicza
+        bCtx.filter = 'blur(3px)';
         drawPerspectiveCandle(bCtx, cd, x0, y0, w, h);
         bCtx.beginPath();
         bCtx.ellipse(cd.x, y0 + h, w * 0.65, h * 0.2, 0, 0, Math.PI * 2);
@@ -1023,7 +1051,6 @@
         bCtx.restore();
       }
 
-      // Wycina z obrazka AI WYŁĄCZNIE piksele wokół znicza
       const aiLayer = document.createElement('canvas');
       aiLayer.width = canvas.width;
       aiLayer.height = canvas.height;
@@ -1032,7 +1059,6 @@
       aCtx.globalCompositeOperation = 'destination-in';
       aCtx.drawImage(blendMask, 0, 0);
 
-      // Nakłada tylko poprawionego znicza na oryginalne zdjęcie
       oCtx.drawImage(aiLayer, 0, 0);
 
       return out;
@@ -1086,6 +1112,7 @@
 
         setBusy("Generuję realistyczną wizualizację przez AI…\nIdealnie wygładzam krawędzie i cienie (ok. 20 s)");
 
+        // AI zawsze dostaje czysty obraz dzienny, bez nałożonego trybu nocnego!
         const cleanBaseCanvas = document.createElement('canvas');
         cleanBaseCanvas.width = cw;
         cleanBaseCanvas.height = ch;
@@ -1093,7 +1120,6 @@
 
         const apiMask = buildApiMask();
 
-        // Ostre negatywne prompty usuwające lewitację
         const positivePrompt = 
           "(masterpiece, high-resolution:1.2), a realistic heavy glass grave candle lantern sitting firmly flat on a stone tombstone, deep dark contact shadow directly underneath, glossy reflections on polished granite, cinematic natural daylight lighting, seamless edge integration";
 
@@ -1106,11 +1132,11 @@
           W, H,
           positivePrompt,
           negativePrompt,
-          0.40 // Delikatniejsza siła - wtapia tylko strukturę i oświetlenie
+          0.40 
         );
 
         resultCanvas = compositeAIRendering(aiImageResult);
-        render();
+        render(); // Render nałoży tryb nocny automatycznie, jeśli użytkownik go włączył
         showResultMode();
         clearBusy();
         setStatus("✨ Gotowe! Znicz został wtopiony w nagrobek przez AI.");
@@ -1134,7 +1160,6 @@
       const c = candles[selected];
       if (!c) return;
       c.scale = parseFloat(e.target.value);
-      updateReflect(c);
       render();
     });
 
@@ -1156,7 +1181,7 @@
       return -1;
     }
 
-    function canDrag() { return candles.length > 0 && !resultCanvas; }
+    function canDrag() { return candles.length > 0 && !resultCanvas && !isNightMode; }
 
     function startDrag(pos) {
       const i = hitTest(pos);
@@ -1178,7 +1203,6 @@
     function endDrag() {
       if (!drag.active) return;
       drag.active = false;
-      updateReflect(candles[selected]);
       render();
     }
 
@@ -1206,21 +1230,59 @@
     });
     window.addEventListener('mouseup', endDrag);
 
-    function save() {
-      let src = resultCanvas;
-      if (!src) {
-        src = document.createElement('canvas');
-        src.width = canvas.width;
-        src.height = canvas.height;
-        drawComposite(src.getContext('2d'));
+    // ---------- POZYSKIWANIE KOŃCOWEGO OBRAZKA DO ZAPISU/UDOSTĘPNIANIA ----------
+    function getFinalCanvas() {
+      const src = document.createElement('canvas');
+      src.width = canvas.width;
+      src.height = canvas.height;
+      const sCtx = src.getContext('2d');
+      
+      if (resultCanvas) {
+        sCtx.drawImage(resultCanvas, 0, 0);
+      } else {
+        drawComposite(sCtx);
       }
+      
+      if (isNightMode && candles.length > 0) {
+        applyNightMode(sCtx);
+      }
+      
+      return src;
+    }
+
+    function save() {
+      const src = getFinalCanvas();
       const link = document.createElement('a');
-      link.download = 'wizualizacja-nagrobek.jpg';
+      link.download = isNightMode ? 'wizualizacja-nocna.jpg' : 'wizualizacja-nagrobek.jpg';
       link.href = src.toDataURL('image/jpeg', 0.95);
       link.click();
     }
     downloadBtn.addEventListener('click', save);
     downloadResultBtn.addEventListener('click', save);
+
+    // ---------- UDOSTĘPNIANIE DO RODZINY ----------
+    async function shareAction() {
+      const src = getFinalCanvas();
+      src.toBlob(async (blob) => {
+        const file = new File([blob], isNightMode ? 'znicz-wieczor.jpg' : 'znicz-dzien.jpg', { type: 'image/jpeg' });
+        
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              title: 'Wizualizacja Znicza',
+              text: 'Zobacz, jak prezentuje się wybrany znicz na nagrobku.',
+              files: [file]
+            });
+          } catch (err) {
+            console.log("Udostępnianie anulowane lub nieudane.");
+          }
+        } else {
+          alert("Twoja przeglądarka nie obsługuje bezpośredniego przesyłania plików. Użyj przycisku Zapisz (💾).");
+        }
+      }, 'image/jpeg', 0.92);
+    }
+    document.getElementById('share-btn').addEventListener('click', shareAction);
+    document.getElementById('share-result-btn').addEventListener('click', shareAction);
 
     window.addEventListener('resize', fitBar);
   </script>
