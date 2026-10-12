@@ -142,16 +142,26 @@
       font-weight: 700;
       box-shadow: 0 0 22px rgba(245, 194, 107, 0.4);
     }
-    .btn-download {
-      background: linear-gradient(180deg, #3d8564, #2c6a4d);
-      border: none;
-      color: #f2fff8;
+
+    .btn-secondary {
+      background: linear-gradient(180deg, rgba(20, 26, 43, 0.9), rgba(14, 20, 36, 0.9));
+      border: 1px solid rgba(245, 194, 107, 0.25);
+      color: #fbe9c4;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
-    .btn-share {
-      background: linear-gradient(180deg, #3b82f6, #2563eb);
-      border: none;
-      color: #fff;
+    .btn-secondary:hover {
+      background: linear-gradient(180deg, rgba(245, 194, 107, 0.15), rgba(217, 143, 43, 0.05));
+      border-color: rgba(245, 194, 107, 0.45);
     }
+    .btn-icon {
+      flex: 0 0 54px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+    }
+
     .btn-undo { background: rgba(255, 255, 255, 0.05); color: var(--muted); }
 
     input[type="file"] { display: none; }
@@ -217,7 +227,7 @@
     }
     canvas { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
 
-    /* Przełącznik dzień/noc na nagrobku */
+    /* Przełącznik dzień/noc */
     .night-toggle {
       position: absolute;
       top: 12px;
@@ -440,16 +450,17 @@
         <button class="icon-btn" id="delete-btn" aria-label="Usuń wybrany znicz" style="display: none;">🗑️</button>
       </div>
 
+      <!-- Widok przed wygenerowaniem: tylko AI oraz mały Zapisz -->
       <div class="btn-row" id="row-edit-btns">
-        <button class="btn btn-ai wide" id="inpaint-btn">✨ Pokaż wynik AI</button>
-        <button class="btn btn-download" id="download-btn" aria-label="Zapisz">💾</button>
-        <button class="btn btn-share" id="share-btn" aria-label="Prześlij">📤</button>
+        <button class="btn btn-ai wide" id="inpaint-btn">✨ Wizualizacja AI</button>
+        <button class="btn btn-secondary btn-icon" id="download-btn" aria-label="Zapisz" title="Zapisz">💾</button>
       </div>
 
+      <!-- Widok po wygenerowaniu: Popraw, Zapisz i Udostępnij -->
       <div class="btn-row" id="row-result-btns" style="display: none;">
-        <button class="btn btn-undo wide" id="undo-btn">↩️ Popraw</button>
-        <button class="btn btn-download" id="download-result-btn" aria-label="Zapisz">💾</button>
-        <button class="btn btn-share" id="share-result-btn" aria-label="Prześlij">📤</button>
+        <button class="btn btn-undo" id="undo-btn">↩️ Popraw</button>
+        <button class="btn btn-secondary wide" id="download-result-btn">💾 Zapisz</button>
+        <button class="btn btn-secondary wide" id="share-result-btn">📤 Udostępnij</button>
       </div>
     </div>
   </div>
@@ -547,13 +558,12 @@
 
     // ---------- PRZEŁĄCZNIK DZIEŃ / NOC ----------
     nightToggleBtn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Blokuje przenoszenie kliknięcia na przesuwanie znicza
+      e.stopPropagation();
       isNightMode = !isNightMode;
       nightToggleBtn.innerText = isNightMode ? "☀️" : "🌙";
       nightToggleBtn.classList.toggle('active', isNightMode);
       render();
     });
-    // Ochrona przed dotykiem dla urządzeń mobilnych
     nightToggleBtn.addEventListener('touchstart', e => e.stopPropagation());
     nightToggleBtn.addEventListener('mousedown', e => e.stopPropagation());
 
@@ -790,7 +800,7 @@
         selectCandle(candles.length - 1);
         showEditMode();
         clearBusy();
-        setStatus("Ustaw znicz palcem na płycie i kliknij Wygeneruj wizualizację AI.");
+        setStatus("Ustaw znicz palcem na płycie i kliknij Wizualizacja AI.");
         focusStage();
       } catch (err) {
         console.error(err);
@@ -933,24 +943,20 @@
     // ---------- FUNKCJA APLIKUJĄCA TRYB NOCNY ----------
     function applyNightMode(cCtx) {
       cCtx.save();
-      // 1. Zmrok wokół nagrobka
       cCtx.fillStyle = 'rgba(12, 16, 28, 0.72)';
       cCtx.fillRect(0, 0, canvas.width, canvas.height);
 
       const order = drawOrder();
       
-      // 2. Odrysowujemy znicze, żeby nie były pod ciemną folią
       for (const cd of order) {
         const { w, h, x0, y0 } = candleRect(cd);
         drawPerspectiveCandle(cCtx, cd, x0, y0, w, h);
       }
 
-      // 3. Dodajemy spektakularną złotą łunę światła
       cCtx.globalCompositeOperation = 'screen';
       for (const cd of order) {
         const { w, h } = candleRect(cd);
 
-        // Łuna na ziemi
         const glowRadius = w * 1.8;
         const groundY = (cd.y + h / 2) + 2;
         const glowGrad = cCtx.createRadialGradient(cd.x, groundY, w * 0.1, cd.x, groundY, glowRadius);
@@ -960,14 +966,13 @@
 
         cCtx.save();
         cCtx.translate(cd.x, groundY);
-        cCtx.scale(1, 0.4); // perspektywa płaska na ziemi
+        cCtx.scale(1, 0.4);
         cCtx.fillStyle = glowGrad;
         cCtx.beginPath();
         cCtx.arc(0, 0, glowRadius, 0, Math.PI * 2);
         cCtx.fill();
         cCtx.restore();
 
-        // Łuna wokół samego ognia w zniczu
         const centerGlowRadius = w * 1.1;
         const centerY = cd.y - h * 0.1;
         const cg = cCtx.createRadialGradient(cd.x, centerY, 0, cd.x, centerY, centerGlowRadius);
@@ -990,18 +995,16 @@
         drawComposite(ctx);
       }
 
-      // NAKŁADANIE TRYBU NOCNEGO WIZUALNIE
       if (isNightMode && candles.length > 0 && graveCanvas) {
         applyNightMode(ctx);
       }
 
-      // Ramka wyboru na wierzchu, ale ukryta, gdy mamy gotowy wynik lub tryb nocny
       if (!resultCanvas && graveCanvas && candles.length && !isNightMode) {
         drawSelection(ctx);
       }
     }
 
-    // ---------- STABLE DIFFUSION AI W PEŁNI ODSEPAROWANE ----------
+    // ---------- STABLE DIFFUSION AI ----------
     function buildApiMask() {
       const m = document.createElement('canvas');
       m.width = canvas.width;
@@ -1112,7 +1115,6 @@
 
         setBusy("Generuję realistyczną wizualizację przez AI…\nIdealnie wygładzam krawędzie i cienie (ok. 20 s)");
 
-        // AI zawsze dostaje czysty obraz dzienny, bez nałożonego trybu nocnego!
         const cleanBaseCanvas = document.createElement('canvas');
         cleanBaseCanvas.width = cw;
         cleanBaseCanvas.height = ch;
@@ -1136,7 +1138,7 @@
         );
 
         resultCanvas = compositeAIRendering(aiImageResult);
-        render(); // Render nałoży tryb nocny automatycznie, jeśli użytkownik go włączył
+        render(); 
         showResultMode();
         clearBusy();
         setStatus("✨ Gotowe! Znicz został wtopiony w nagrobek przez AI.");
@@ -1230,58 +1232,67 @@
     });
     window.addEventListener('mouseup', endDrag);
 
-    // ---------- POZYSKIWANIE KOŃCOWEGO OBRAZKA DO ZAPISU/UDOSTĘPNIANIA ----------
+    // ---------- POZYSKIWANIE KOŃCOWEGO OBRAZKA ----------
     function getFinalCanvas() {
       const src = document.createElement('canvas');
-      src.width = canvas.width;
-      src.height = canvas.height;
+      src.width = canvas.width || 800; // Fallback bezpieczeństwa
+      src.height = canvas.height || 600;
       const sCtx = src.getContext('2d');
       
       if (resultCanvas) {
         sCtx.drawImage(resultCanvas, 0, 0);
-      } else {
+      } else if (graveCanvas) {
         drawComposite(sCtx);
       }
       
-      if (isNightMode && candles.length > 0) {
+      if (isNightMode && candles.length > 0 && graveCanvas) {
         applyNightMode(sCtx);
       }
       
       return src;
     }
 
-    function save() {
-      const src = getFinalCanvas();
-      const link = document.createElement('a');
-      link.download = isNightMode ? 'wizualizacja-nocna.jpg' : 'wizualizacja-nagrobek.jpg';
-      link.href = src.toDataURL('image/jpeg', 0.95);
-      link.click();
+    // ---------- OBSŁUGA ZAPISYWANIA ----------
+    async function downloadAction() {
+      if (!graveCanvas) return;
+      try {
+        const src = getFinalCanvas();
+        const link = document.createElement('a');
+        link.download = isNightMode ? 'wizualizacja-nocna.jpg' : 'wizualizacja-nagrobek.jpg';
+        link.href = src.toDataURL('image/jpeg', 0.95);
+        link.click();
+      } catch (err) {
+        console.error("Błąd zapisu:", err);
+        setStatus("Nie udało się zapisać zdjęcia.", true);
+      }
     }
-    downloadBtn.addEventListener('click', save);
-    downloadResultBtn.addEventListener('click', save);
 
-    // ---------- UDOSTĘPNIANIE DO RODZINY ----------
+    // ---------- OBSŁUGA UDOSTĘPNIANIA (WEB SHARE API) ----------
     async function shareAction() {
-      const src = getFinalCanvas();
-      src.toBlob(async (blob) => {
+      if (!graveCanvas) return;
+      try {
+        const src = getFinalCanvas();
+        // Wymuszenie asynchronicznego utworzenia bloba w nowoczesny sposób
+        const blob = await new Promise(resolve => src.toBlob(resolve, 'image/jpeg', 0.92));
         const file = new File([blob], isNightMode ? 'znicz-wieczor.jpg' : 'znicz-dzien.jpg', { type: 'image/jpeg' });
         
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              title: 'Wizualizacja Znicza',
-              text: 'Zobacz, jak prezentuje się wybrany znicz na nagrobku.',
-              files: [file]
-            });
-          } catch (err) {
-            console.log("Udostępnianie anulowane lub nieudane.");
-          }
+          await navigator.share({
+            title: 'Wizualizacja Znicza',
+            text: 'Zobacz, jak prezentuje się ten znicz na nagrobku.',
+            files: [file]
+          });
         } else {
-          alert("Twoja przeglądarka nie obsługuje bezpośredniego przesyłania plików. Użyj przycisku Zapisz (💾).");
+          alert("Twoja przeglądarka nie obsługuje udostępniania plików (np. na Windows). Użyj przycisku Zapisz (💾).");
         }
-      }, 'image/jpeg', 0.92);
+      } catch (err) {
+        console.log("Udostępnianie zostało anulowane lub wystąpił błąd.");
+      }
     }
-    document.getElementById('share-btn').addEventListener('click', shareAction);
+
+    // Bezpieczne przypięcie eventów zapisu i udostępniania
+    document.getElementById('download-btn').addEventListener('click', downloadAction);
+    document.getElementById('download-result-btn').addEventListener('click', downloadAction);
     document.getElementById('share-result-btn').addEventListener('click', shareAction);
 
     window.addEventListener('resize', fitBar);
