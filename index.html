@@ -167,7 +167,6 @@
     }
     #status.error { color: #ffb4a8; }
 
-    /* Moduł doradcy – stylistyka bursztynowo-złota */
     .advisor-box {
       margin-top: 12px;
       padding: 16px;
@@ -381,7 +380,6 @@
     <input type="file" id="input-grave-camera" accept="image/*" capture="environment">
     <input type="file" id="input-grave" accept="image/*">
 
-    <!-- Doradca kompozycji -->
     <button class="btn btn-advisor" id="advisor-btn" style="display: none;">
       💡 Doradź, jakie znicze pasują
     </button>
@@ -443,7 +441,6 @@
   </div>
 
   <script>
-    // ---------- ADRES WORKERA AI ----------
     const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
@@ -569,14 +566,12 @@
     advisorBtn.addEventListener('click', () => {
       if (!graveCanvas) return;
 
-      // Zwijanie, jeśli już otwarte
       if (advisorBox.style.display === 'block') {
         advisorBox.style.display = 'none';
         advisorBtn.innerText = "💡 Pokaż rekomendację zniczy";
         return;
       }
 
-      // Rozwijanie wcześniej wyliczonej porady
       if (advisorGenerated) {
         advisorBox.style.display = 'block';
         advisorBtn.innerText = "🔼 Zwiń rekomendację zniczy";
@@ -584,7 +579,6 @@
         return;
       }
 
-      // Analiza próbki płyty
       const sampleW = 60;
       const sampleH = 40;
       const sc = document.createElement('canvas');
@@ -929,10 +923,24 @@
       return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
     }
 
+    // Pomocnicza funkcja rysująca znicz z naturalnym pochyleniem perspektywicznym
+    function drawPerspectiveCandle(cCtx, cd, x0, y0, w, h) {
+      cCtx.save();
+      // Obliczamy współczynnik perspektywy na podstawie położenia pionowego na nagrobku
+      const vertRel = (cd.y / canvas.height) - 0.5; // -0.5 do 0.5
+      const horizRel = (cd.x / canvas.width) - 0.5;
+
+      // Delikatne zbieganie się ku górze i pochylenie zależne od osi optycznej kadru
+      cCtx.translate(cd.x, y0 + h);
+      cCtx.transform(1, 0, -horizRel * 0.04, 0.98 + (vertRel * 0.04), 0, 0);
+      cCtx.drawImage(cd.cut, -w / 2, -h, w, h);
+      cCtx.restore();
+    }
+
     function drawCandlesPlain(c) {
       for (const cd of drawOrder()) {
         const { w, h, x0, y0 } = candleRect(cd);
-        c.drawImage(cd.cut, x0, y0, w, h);
+        drawPerspectiveCandle(c, cd, x0, y0, w, h);
       }
     }
 
@@ -941,17 +949,17 @@
       if (!candles.length) return;
       const order = drawOrder();
 
-      // Odbicia w kamieniu
+      // 1. Odbicia w kamieniu
       for (const cd of order) {
         if (cd.reflect <= 0) continue;
         const { w, h, x0, y0 } = candleRect(cd);
-        const rh = Math.max(2, Math.round(h * 0.5));
+        const rh = Math.max(2, Math.round(h * 0.45));
         const refl = document.createElement('canvas');
         refl.width = Math.max(2, Math.round(w));
         refl.height = rh;
         const rc = refl.getContext('2d');
-        rc.translate(0, h);
-        rc.scale(1, -1);
+        rc.translate(0, rh);
+        rc.scale(1, -0.7); // spłaszczone odbicie lustrzane na płaszczyźnie płyty
         rc.drawImage(cd.cut, 0, 0, w, h);
         rc.setTransform(1, 0, 0, 1, 0, 0);
         rc.globalCompositeOperation = 'destination-in';
@@ -960,33 +968,33 @@
         g.addColorStop(1, 'rgba(0,0,0,0)');
         rc.fillStyle = g;
         rc.fillRect(0, 0, refl.width, rh);
-        c.drawImage(refl, x0, y0 + h);
+        c.drawImage(refl, x0, y0 + h - 2);
       }
 
-      // Cienie kontaktowe
+      // 2. Cienie kontaktowe na pochyłej płycie
       for (const cd of order) {
         const { w, h, y0 } = candleRect(cd);
         c.save();
         c.translate(cd.x, y0 + h);
-        c.scale(1, 0.22);
-        const rw = w * 0.8;
+        c.scale(1, 0.24); // eliptyczny cień podstawy
+        const rw = w * 0.85;
         const rg = c.createRadialGradient(0, 0, 0, 0, 0, rw);
-        rg.addColorStop(0, 'rgba(0,0,0,0.7)');
+        rg.addColorStop(0, 'rgba(0,0,0,0.75)');
         rg.addColorStop(1, 'rgba(0,0,0,0)');
         c.fillStyle = rg;
         c.fillRect(-rw, -rw, rw * 2, rw * 2);
         c.restore();
       }
 
-      // Znicze z cieniem
+      // 3. Rysowanie zniczy z miękkim cieniem
       for (const cd of order) {
         const { w, h, x0, y0 } = candleRect(cd);
         c.save();
         c.shadowColor = 'rgba(0,0,0,0.45)';
         c.shadowBlur = w * 0.06;
-        c.shadowOffsetX = w * 0.04;
-        c.shadowOffsetY = h * 0.01;
-        c.drawImage(cd.cut, x0, y0, w, h);
+        c.shadowOffsetX = w * 0.03;
+        c.shadowOffsetY = h * 0.015;
+        drawPerspectiveCandle(c, cd, x0, y0, w, h);
         c.restore();
       }
     }
@@ -1038,6 +1046,7 @@
       }
     }
 
+    // Maska etapu 1: cień i podstawa nagrobka
     function buildMask() {
       const m = document.createElement('canvas');
       m.width = canvas.width;
@@ -1049,8 +1058,9 @@
       mc.fillStyle = '#fff';
       for (const cd of candles) {
         const { w, h, x0, y0 } = candleRect(cd);
-        const pad = w * 0.4;
-        mc.fillRect(x0 - pad, y0 + h * 0.6, w + pad * 2, h * 0.4 + h * 0.5);
+        const pad = w * 0.45;
+        // Maska obejmuje spód znicza oraz płytę nagrobka, gdzie pada cień
+        mc.fillRect(x0 - pad, y0 + h * 0.65, w + pad * 2, h * 0.35 + h * 0.5);
       }
       for (const cd of candles) {
         const { w, x0, y0 } = candleRect(cd);
@@ -1059,6 +1069,7 @@
       return m;
     }
 
+    // Maska etapu 2: znicz z delikatnym marginesem na dopasowanie krawędzi do perspektywy
     function buildCandleMask() {
       const m = document.createElement('canvas');
       m.width = canvas.width;
@@ -1068,7 +1079,7 @@
       mc.fillRect(0, 0, m.width, m.height);
       for (const cd of candles) {
         const { w, x0, y0 } = candleRect(cd);
-        drawDilated(mc, silhouetteOf(cd, '#fff'), x0, y0, Math.max(4, w * 0.03));
+        drawDilated(mc, silhouetteOf(cd, '#fff'), x0, y0, Math.max(5, w * 0.035));
       }
       return m;
     }
@@ -1150,7 +1161,6 @@
       return layer;
     }
 
-    // Kliknięcie w przycisk AI
     inpaintBtn.addEventListener('click', async () => {
       if (!candles.length) return;
       inpaintBtn.disabled = true;
@@ -1163,12 +1173,18 @@
         const H = Math.max(256, Math.round(ch * k / 8) * 8);
         const auto = autoSettings();
 
-        // Etap 1: cień i odbicie pod zniczami
-        setBusy("Tworzę realistyczną wizualizację…\nDopasowuję cień i odbicie (ok. 30 s)");
+        // 1. TWORZYMY CZYSTY PODGLĄD (BEZ ŻÓŁTEJ RAMKI SELEKCJI DLA AI)
+        const cleanBaseCanvas = document.createElement('canvas');
+        cleanBaseCanvas.width = cw;
+        cleanBaseCanvas.height = ch;
+        drawComposite(cleanBaseCanvas.getContext('2d'));
+
+        // Etap 1: Cień, odbicie i kąt płaszczyzny pod zniczami
+        setBusy("Tworzę realistyczną wizualizację…\nDopasowuję cień, odbicie i kąt płyty (ok. 30 s)");
         const r1 = await callAI(
-          canvas, buildMask(), W, H,
-          "soft natural shadows and glossy reflections on polished black granite slab, empty stone surface, photorealistic, outdoor daylight",
-          "candle, lantern, glass, flame, object, text, watermark, blurry, deformed",
+          cleanBaseCanvas, buildMask(), W, H,
+          "natural contact cast shadow and glossy reflection on sloping polished black granite slab, correct ground plane perspective, photorealistic outdoor cemetery lighting",
+          "yellow border, selection outline, box, candle, glass, flame, text, watermark, blurry",
           auto.shadowStrength
         );
         const d1 = maskDiff(r1.aiCanvas, r1.img, r1.maskSmall, W, H);
@@ -1185,13 +1201,13 @@
 
         let final = stage1;
 
-        // Etap 2: wtopienie zniczy w scenę
-        setBusy("Tworzę realistyczną wizualizację…\n" + (many ? "Wtapiam znicze w scenę" : "Wtapiam znicz w scenę"));
+        // Etap 2: Wtopienie znicza w scenę z dopasowaniem perspektywy stania
+        setBusy("Tworzę realistyczną wizualizację…\n" + (many ? "Wtapiam znicze pod kątem nagrobka" : "Wtapiam znicz pod kątem nagrobka"));
         const r2 = await callAI(
           stage1, buildCandleMask(), W, H,
-          "realistic glass grave candle lanterns on a black granite tombstone in a cemetery, natural outdoor daylight, consistent lighting, photorealistic, same objects",
-          "different object, deformed, extra objects, text, watermark, blurry",
-          0.35
+          "realistic glass grave candle lanterns standing firmly on a sloping granite tombstone slab, accurate depth perspective angle, balanced cemetery daylight, photorealistic",
+          "yellow outline, yellow frame, dashed line, floating, crooked, distorted, extra objects, watermark",
+          0.33
         );
         const d2 = maskDiff(r2.aiCanvas, r2.img, r2.maskSmall, W, H);
         const trust = d2 < 22 ? 1 : d2 < 35 ? 0.6 : d2 < 50 ? 0.3 : 0;
