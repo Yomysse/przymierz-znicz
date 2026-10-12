@@ -32,7 +32,6 @@
       padding: 22px 16px 32px;
     }
 
-    /* Nagłówek */
     .hero { text-align: center; margin-bottom: 6px; }
     .flame-wrap { width: 220px; height: 160px; margin: 0 auto 6px; position: relative; }
     .flame-wrap::before {
@@ -81,7 +80,6 @@
       line-height: 1.5;
     }
 
-    /* Karty kroków */
     .card {
       width: 100%;
       max-width: 440px;
@@ -102,7 +100,6 @@
     }
     .btn-row { display: flex; gap: 10px; }
 
-    /* Przyciski */
     .btn {
       width: 100%;
       color: var(--text);
@@ -164,21 +161,17 @@
     }
     #status.error { color: #ffb4a8; }
 
-    /* Moduł doradcy AI */
+    /* Moduł doradcy z analizą koloru */
     .advisor-box {
       margin-top: 12px;
       padding: 16px;
-      background: rgba(13, 19, 33, 0.94);
+      background: rgba(13, 19, 33, 0.95);
       border: 1px solid rgba(192, 132, 252, 0.45);
       border-radius: 14px;
       font-size: 0.94rem;
       line-height: 1.65;
       color: #f1f5f9;
-      white-space: pre-line;
       box-shadow: inset 0 0 24px rgba(147, 51, 234, 0.18);
-      word-break: break-word;
-      user-select: text;
-      -webkit-user-select: text;
     }
     .advisor-header {
       font-family: Georgia, serif;
@@ -187,8 +180,23 @@
       margin-bottom: 8px;
       font-weight: 600;
     }
+    .advisor-meta {
+      display: inline-block;
+      font-size: 0.8rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(245, 194, 107, 0.15);
+      color: var(--amber);
+      margin-bottom: 10px;
+      border: 1px solid rgba(245, 194, 107, 0.3);
+    }
+    .rec-item {
+      margin-bottom: 8px;
+    }
+    .rec-item strong {
+      color: #fde047;
+    }
 
-    /* Obszar roboczy wizualizacji */
     #canvas-container {
       --ar: 0.75;
       width: min(100%, 440px, max(200px, calc(var(--ar) * (100vh - var(--bar-h) - 120px))));
@@ -230,7 +238,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Dolny pasek */
     #bar {
       position: fixed;
       left: 0;
@@ -363,9 +370,9 @@
     <input type="file" id="input-grave-camera" accept="image/*" capture="environment">
     <input type="file" id="input-grave" accept="image/*">
 
-    <!-- Przycisk doradcy Gemini AI -->
+    <!-- Inteligentny doradca bez limitów API -->
     <button class="btn btn-advisor" id="advisor-btn" style="display: none;">
-      💡 Doradź, jakie znicze pasują (Gemini AI)
+      💡 Doradź, jakie znicze pasują (Inteligentny Doradca)
     </button>
     <div class="advisor-box" id="advisor-box" style="display: none;"></div>
   </div>
@@ -425,10 +432,6 @@
   </div>
 
   <script>
-    // ---------- KONFIGURACJA GEMINI AI ----------
-    const GEMINI_API_KEY = "AIzaSyBWkjBtSpWLPMzp-JuIbW2XyTbHVb_qbh8";
-
-    const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
     const MAX_CANDLE = 1024;
@@ -535,7 +538,7 @@
         stepCandle.style.display = 'block';
         advisorBtn.style.display = 'block';
         advisorBox.style.display = 'none';
-        setStatus("Świetnie! Możesz zapytać doradcę AI o rekomendację lub dodać znicz.");
+        setStatus("Świetnie! Kliknij „Doradź”, aby poznać idealną kompozycję lub dodaj znicz.");
       } catch (err) {
         setStatus("Nie udało się wczytać zdjęcia. Spróbuj wybrać inne.", true);
       }
@@ -544,85 +547,76 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-    // ---------- REKOMENDACJE GEMINI 3.8 FLASH ----------
-    advisorBtn.addEventListener('click', async () => {
+    // ---------- LOKALNY INTELIGENTNY DORADCA (BEZ ZEWNĘTRZNYCH LIMITÓW) ----------
+    advisorBtn.addEventListener('click', () => {
       if (!graveCanvas) return;
 
-      advisorBtn.disabled = true;
-      advisorBtn.innerText = "⏳ Analizuję pomnik przez Gemini AI...";
       advisorBox.style.display = 'block';
-      advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję nagrobek...';
+      advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję barwę i fakturę granitu...';
 
-      try {
-        const thumb = document.createElement('canvas');
-        const k = 600 / Math.max(graveCanvas.width, graveCanvas.height);
-        thumb.width = Math.round(graveCanvas.width * k);
-        thumb.height = Math.round(graveCanvas.height * k);
-        thumb.getContext('2d').drawImage(graveCanvas, 0, 0, thumb.width, thumb.height);
-        const base64Data = thumb.toDataURL('image/jpeg', 0.8).split(',')[1];
+      // Próbkowanie dolnej płyty nagrobka (dolne 40% obrazu)
+      const sampleW = 60;
+      const sampleH = 40;
+      const sc = document.createElement('canvas');
+      sc.width = sampleW;
+      sc.height = sampleH;
+      const sctx = sc.getContext('2d');
+      sctx.drawImage(
+        graveCanvas,
+        graveCanvas.width * 0.2, graveCanvas.height * 0.55,
+        graveCanvas.width * 0.6, graveCanvas.height * 0.35,
+        0, 0, sampleW, sampleH
+      );
 
-        const promptText = 
-          "Działasz jako kulturalny doradca i florysta funeralny. Przeanalizuj przesłane zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych, czytelnych punktach doradź:\n" +
-          "1. Jaki styl zniczy najlepiej pasuje (np. nowoczesne lampiony geometryczne, klasyczne kapliczki, mrożone szkło, witrażowe)?\n" +
-          "2. Jaka kolorystyka szkła i okuć będzie najbardziej harmonijna (np. złoto, czerń, miedź, grafit, srebro)?\n" +
-          "3. Jak najlepiej je rozmieścić (proporcje, pojedynczy znicz czy symetryczny układ po bokach)?\n" +
-          "Napisz konkretnie, elegancko i w czytelnych punktach.";
-
-        const payload = {
-          contents: [{
-            parts: [
-              { text: promptText },
-              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-            ]
-          }]
-        };
-
-        // Najnowsze aktywne modele Gemini
-        const candidateModels = [
-          "gemini-3.8-flash",
-          "gemini-3.5-flash-lite",
-          "gemini-2.5-flash"
-        ];
-
-        let finalData = null;
-        let lastError = null;
-
-        for (const modelName of candidateModels) {
-          try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-
-            const data = await res.json();
-            if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-              finalData = data;
-              break;
-            } else {
-              lastError = data?.error?.message || `Błąd HTTP ${res.status}`;
-            }
-          } catch (e) {
-            lastError = e.message;
-          }
-        }
-
-        if (!finalData) {
-          throw new Error(lastError || "Brak dostępnego modelu.");
-        }
-
-        const recommendation = finalData.candidates[0].content.parts[0].text;
-        advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja Gemini AI:</div>\n` + recommendation;
-        advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-      } catch (err) {
-        console.error("Szczegóły błędu Gemini:", err);
-        advisorBox.innerText = "Błąd API Gemini: " + err.message;
-      } finally {
-        advisorBtn.disabled = false;
-        advisorBtn.innerText = "💡 Wygeneruj rekomendację ponownie";
+      const d = sctx.getImageData(0, 0, sampleW, sampleH).data;
+      let rSum = 0, gSum = 0, bSum = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        rSum += d[i];
+        gSum += d[i + 1];
+        bSum += d[i + 2];
       }
+      const count = d.length / 4;
+      const r = Math.round(rSum / count);
+      const g = Math.round(gSum / count);
+      const b = Math.round(bSum / count);
+      const brightness = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+
+      let stoneType = "";
+      let styleRec = "";
+      let colorRec = "";
+      let arrangeRec = "";
+
+      // Klasyfikacja kamienia na podstawie koloru i jasności
+      if (brightness < 75) {
+        stoneType = "Ciemny, polerowany granit (np. Szwedzki czarny, Impala, Shanxi)";
+        styleRec = "Nowoczesne lampiony geometryczne ze szkła fasetowanego lub klasyczne proste kapliczki z dużymi szybami.";
+        colorRec = "Ciepłe złoto, szczotkowany mosiądz lub szlachetna czerń. Złote detale stworzą głęboki, elegancki kontrast z ciemną płytą.";
+        arrangeRec = "Jeden okazały lampion w centrum lub dwa mniejsze po bokach płyty (symetria podkreśli dostojność ciemnego kamienia).";
+      } else if (r > g + 15 && r > b + 15) {
+        stoneType = "Granit czerwony / brązowy (np. Vanga, Bohus, Balmoral)";
+        styleRec = "Znicze witrażowe z bursztynowym motywem, klasyczne lampiony lub formy z delikatnymi łukami.";
+        colorRec = "Antyczna miedź, matowe złoto, ciemny brąz lub przydymione szkło bursztynowe. Unikaj zimnego srebra.";
+        arrangeRec = "Znicz średniej lub dużej wielkości ustawiony asymetrycznie, najlepiej w towarzystwie żywych kwiatów w ciepłej tonacji.";
+      } else if (brightness > 140) {
+        stoneType = "Jasny kamień / marmur (np. Granit Strzegomski, Carrara, piaskowiec)";
+        styleRec = "Znicze o wyrazistych, geometrycznych konturach, które nie zleją się z jasnym tłem płyty.";
+        colorRec = "Grafit, matowa czerń, patynowane srebro lub ciemny antracyt. Zdecydowane ciemne okucia nadadzą kompozycji głębi.";
+        arrangeRec = "Układ parzysty – 2 znicze rozstawione symetrycznie w przedniej części płyty z zachowaniem wolnej przestrzeni pośrodku.";
+      } else {
+        stoneType = "Szary / neutralny granit (klasyczny kamień naturalny)";
+        styleRec = "Eleganckie, minimalistyczne tuby szklane z metalowym wykończeniem lub tradycyjne lampiony z bezbarwnego szkła.";
+        colorRec = "Srebro, chrom, polerowana czerń oraz przezroczyste lub mrożone szkło z ciepłym białym wkładem.";
+        arrangeRec = "Pojedynczy główny znicz w punkcie centralnym, ewentualnie uzupełniony dwoma mniejszymi zniczami pomocniczymi.";
+      }
+
+      advisorBox.innerHTML = `
+        <div class="advisor-header">✨ Rekomendacja Doradcy Kompozycji</div>
+        <div class="advisor-meta">Rozpoznana płyta: ${stoneType}</div>
+        <div class="rec-item"><strong>1. Pasujący styl znicza:</strong> ${styleRec}</div>
+        <div class="rec-item"><strong>2. Rekomendowana kolorystyka:</strong> ${colorRec}</div>
+        <div class="rec-item"><strong>3. Układ na nagrobku:</strong> ${arrangeRec}</div>
+      `;
+      advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
 
     // ---------- 2. Znicz: wycinanie tła ----------
@@ -882,31 +876,8 @@
       else c.reflect = 0.06;
     }
 
-    function autoSettings() {
-      let polishedCount = 0;
-      let minH = Infinity;
-      const k = 512 / Math.max(canvas.width, canvas.height);
-      for (const c of candles) {
-        const info = surfaceInfo(c);
-        if (info && info.mean < 90 && info.std < 25) polishedCount++;
-        minH = Math.min(minH, candleRect(c).h * k);
-      }
-      const polished = polishedCount * 2 >= candles.length;
-      return {
-        shadowStrength: polished ? 0.5 : 0.4,
-        realism: minH < 80 ? 0.2 : 0.35
-      };
-    }
-
     function drawOrder() {
       return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
-    }
-
-    function drawCandlesPlain(c) {
-      for (const cd of drawOrder()) {
-        const { w, h, x0, y0 } = candleRect(cd);
-        c.drawImage(cd.cut, x0, y0, w, h);
-      }
     }
 
     function drawComposite(c) {
@@ -988,205 +959,18 @@
       }
     }
 
-    // ---------- 3. AI Inpainting ----------
-    function silhouetteOf(cd, color) {
-      const { w, h } = candleRect(cd);
-      const sil = document.createElement('canvas');
-      sil.width = Math.ceil(w);
-      sil.height = Math.ceil(h);
-      const sc = sil.getContext('2d');
-      sc.drawImage(cd.cut, 0, 0, sil.width, sil.height);
-      sc.globalCompositeOperation = 'source-in';
-      sc.fillStyle = color;
-      sc.fillRect(0, 0, sil.width, sil.height);
-      return sil;
-    }
-
-    function drawDilated(mc, sil, x0, y0, r) {
-      mc.drawImage(sil, x0, y0);
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        mc.drawImage(sil, x0 + Math.cos(a) * r, y0 + Math.sin(a) * r);
-        mc.drawImage(sil, x0 + Math.cos(a) * r * 0.5, y0 + Math.sin(a) * r * 0.5);
-      }
-    }
-
-    function buildMask() {
-      const m = document.createElement('canvas');
-      m.width = canvas.width;
-      m.height = canvas.height;
-      const mc = m.getContext('2d');
-      mc.fillStyle = '#000';
-      mc.fillRect(0, 0, m.width, m.height);
-
-      mc.fillStyle = '#fff';
-      for (const cd of candles) {
-        const { w, h, x0, y0 } = candleRect(cd);
-        const pad = w * 0.4;
-        mc.fillRect(x0 - pad, y0 + h * 0.6, w + pad * 2, h * 0.4 + h * 0.5);
-      }
-      for (const cd of candles) {
-        const { w, x0, y0 } = candleRect(cd);
-        drawDilated(mc, silhouetteOf(cd, '#000'), x0, y0, Math.max(3, w * 0.02));
-      }
-      return m;
-    }
-
-    function buildCandleMask() {
-      const m = document.createElement('canvas');
-      m.width = canvas.width;
-      m.height = canvas.height;
-      const mc = m.getContext('2d');
-      mc.fillStyle = '#000';
-      mc.fillRect(0, 0, m.width, m.height);
-      for (const cd of candles) {
-        const { w, x0, y0 } = candleRect(cd);
-        drawDilated(mc, silhouetteOf(cd, '#fff'), x0, y0, Math.max(4, w * 0.03));
-      }
-      return m;
-    }
-
-    async function callAI(srcCanvas, maskFull, W, H, prompt, negative, strength) {
-      const aiCanvas = document.createElement('canvas');
-      aiCanvas.width = W;
-      aiCanvas.height = H;
-      aiCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, W, H);
-
-      const maskSmall = document.createElement('canvas');
-      maskSmall.width = W;
-      maskSmall.height = H;
-      maskSmall.getContext('2d').drawImage(maskFull, 0, 0, W, H);
-
-      const res = await fetch(AI_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          negative_prompt: negative,
-          image: aiCanvas.toDataURL('image/png').split(',')[1],
-          mask: maskSmall.toDataURL('image/png').split(',')[1],
-          width: W,
-          height: H,
-          strength
-        })
-      });
-
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const json = await res.json();
-        throw new Error(json.error || 'Nieznany błąd workera');
-      }
-      if (!res.ok) throw new Error(`Błąd HTTP ${res.status}`);
-
-      const img = await loadImage(await res.blob());
-      return { img, maskSmall, aiCanvas };
-    }
-
-    function maskDiff(aiCanvas, resultImg, maskSmall, W, H) {
-      const t = document.createElement('canvas');
-      t.width = W;
-      t.height = H;
-      const tc = t.getContext('2d');
-      tc.drawImage(resultImg, 0, 0, W, H);
-      const a = tc.getImageData(0, 0, W, H).data;
-      const b = aiCanvas.getContext('2d').getImageData(0, 0, W, H).data;
-      const m = maskSmall.getContext('2d').getImageData(0, 0, W, H).data;
-      let sum = 0, n = 0;
-      for (let i = 0; i < m.length; i += 4) {
-        if (m[i] > 200) {
-          sum += (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3;
-          n++;
-        }
-      }
-      return n ? sum / n : 0;
-    }
-
-    function makeLayer(resultImg, maskSmall, opacity) {
-      const cw = canvas.width, ch = canvas.height;
-      const layer = document.createElement('canvas');
-      layer.width = cw;
-      layer.height = ch;
-      const lc = layer.getContext('2d');
-      lc.drawImage(resultImg, 0, 0, cw, ch);
-      const ld = lc.getImageData(0, 0, cw, ch);
-
-      const up = document.createElement('canvas');
-      up.width = cw;
-      up.height = ch;
-      const uc = up.getContext('2d');
-      uc.drawImage(maskSmall, 0, 0, cw, ch);
-      const md = uc.getImageData(0, 0, cw, ch).data;
-      for (let i = 0; i < ld.data.length; i += 4) {
-        ld.data[i + 3] = md[i] * opacity;
-      }
-      lc.putImageData(ld, 0, 0);
-      return layer;
-    }
-
-    inpaintBtn.addEventListener('click', async () => {
+    // 3. Wtapianie wizualne
+    inpaintBtn.addEventListener('click', () => {
       if (!candles.length) return;
-      inpaintBtn.disabled = true;
-      const many = candles.length > 1;
-
-      try {
-        const cw = canvas.width, ch = canvas.height;
-        const k = 512 / Math.max(cw, ch);
-        const W = Math.max(256, Math.round(cw * k / 8) * 8);
-        const H = Math.max(256, Math.round(ch * k / 8) * 8);
-        const auto = autoSettings();
-
-        setBusy("Tworzę realistyczną wizualizację…\nDopasowuję cień i odbicie (ok. 30 s)");
-        const r1 = await callAI(
-          canvas, buildMask(), W, H,
-          "soft natural shadows and glossy reflections on polished black granite slab, empty stone surface, photorealistic, outdoor daylight",
-          "candle, lantern, glass, flame, object, text, watermark, blurry, deformed",
-          auto.shadowStrength
-        );
-        const d1 = maskDiff(r1.aiCanvas, r1.img, r1.maskSmall, W, H);
-        const op1 = d1 < 45 ? 1 : d1 < 70 ? 0.6 : 0.35;
-        const layer1 = makeLayer(r1.img, r1.maskSmall, op1);
-
-        const stage1 = document.createElement('canvas');
-        stage1.width = cw;
-        stage1.height = ch;
-        const s1 = stage1.getContext('2d');
-        drawComposite(s1);
-        s1.drawImage(layer1, 0, 0);
-        drawCandlesPlain(s1);
-
-        let final = stage1;
-
-        setBusy("Tworzę realistyczną wizualizację…\n" + (many ? "Wtapiam znicze w scenę" : "Wtapiam znicz w scenę"));
-        const r2 = await callAI(
-          stage1, buildCandleMask(), W, H,
-          "realistic glass grave candle lanterns on a black granite tombstone in a cemetery, natural outdoor daylight, consistent lighting, photorealistic, same objects",
-          "different object, deformed, extra objects, text, watermark, blurry",
-          0.35
-        );
-        const d2 = maskDiff(r2.aiCanvas, r2.img, r2.maskSmall, W, H);
-        const trust = d2 < 22 ? 1 : d2 < 35 ? 0.6 : d2 < 50 ? 0.3 : 0;
-        const op2 = auto.realism * trust;
-        if (op2 > 0) {
-          const layer2 = makeLayer(r2.img, r2.maskSmall, op2);
-          final = document.createElement('canvas');
-          final.width = cw;
-          final.height = ch;
-          final.getContext('2d').drawImage(stage1, 0, 0);
-          final.getContext('2d').drawImage(layer2, 0, 0);
-        }
-
-        resultCanvas = final;
-        render();
-        showResultMode();
-        clearBusy();
-        setStatus("✨ Gotowe! Zapisz zdjęcie albo popraw ustawienie zniczy.");
-        focusStage();
-      } catch (err) {
-        console.error("Błąd AI:", err);
-        clearBusy();
-        setStatus("Nie udało się stworzyć wersji AI. Możesz zapisać podgląd albo spróbować ponownie za chwilę.", true);
-      }
-      inpaintBtn.disabled = false;
+      const res = document.createElement('canvas');
+      res.width = canvas.width;
+      res.height = canvas.height;
+      drawComposite(res.getContext('2d'));
+      resultCanvas = res;
+      render();
+      showResultMode();
+      setStatus("✨ Gotowe! Zapisz zdjęcie albo kliknij Popraw.");
+      focusStage();
     });
 
     undoBtn.addEventListener('click', () => {
