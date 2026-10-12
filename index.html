@@ -134,9 +134,6 @@
       font-size: 0.93rem;
       box-shadow: 0 0 16px rgba(217, 143, 43, 0.12);
     }
-    .btn-advisor:hover {
-      background: linear-gradient(180deg, rgba(245, 194, 107, 0.24), rgba(217, 143, 43, 0.14));
-    }
 
     .btn-ai {
       background: linear-gradient(180deg, #f9dc9a, #e0a23a);
@@ -185,7 +182,6 @@
       font-size: 1.05rem;
       margin-bottom: 8px;
       font-weight: 600;
-      letter-spacing: 0.02em;
       border-bottom: 1px solid rgba(245, 194, 107, 0.2);
       padding-bottom: 6px;
     }
@@ -201,11 +197,7 @@
     }
     .rec-item { margin-bottom: 10px; }
     .rec-item:last-child { margin-bottom: 0; }
-    .rec-item strong {
-      color: #fbe9c4;
-      display: block;
-      margin-bottom: 2px;
-    }
+    .rec-item strong { color: #fbe9c4; display: block; margin-bottom: 2px; }
 
     #canvas-container {
       --ar: 0.75;
@@ -441,7 +433,6 @@
   </div>
 
   <script>
-    const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
     const MAX_CANDLE = 1024;
@@ -562,7 +553,7 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-    // ---------- INTELIGENTNY DORADCA ZE ZWIJANIEM ----------
+    // ---------- DORADCA KOMPOZYCJI ----------
     advisorBtn.addEventListener('click', () => {
       if (!graveCanvas) return;
 
@@ -612,24 +603,24 @@
 
       if (brightness < 75) {
         stoneType = "Ciemny, polerowany granit (np. Szwedzki czarny, Impala, Shanxi)";
-        styleRec = "Nowoczesne lampiony geometryczne ze szkła fasetowanego lub klasyczne proste kapliczki z dużymi szybami.";
-        colorRec = "Ciepłe złoto, szczotkowany mosiądz lub szlachetna czerń. Złote detale stworzą głęboki, elegancki kontrast z ciemną płytą.";
-        arrangeRec = "Jeden okazały lampion w centrum lub dwa mniejsze po bokach płyty (symetria podkreśli dostojność ciemnego kamienia).";
+        styleRec = "Nowoczesne lampiony geometryczne ze szkła fasetowanego lub proste kapliczki z dużymi szybami.";
+        colorRec = "Ciepłe złoto, szczotkowany mosiądz lub szlachetna czerń.";
+        arrangeRec = "Jeden okazały lampion w centrum lub dwa mniejsze symetrycznie po bokach płyty.";
       } else if (r > g + 15 && r > b + 15) {
         stoneType = "Granit czerwony / brązowy (np. Vanga, Bohus, Balmoral)";
-        styleRec = "Znicze witrażowe z bursztynowym motywem, klasyczne lampiony lub formy z delikatnymi łukami.";
-        colorRec = "Antyczna miedź, matowe złoto, ciemny brąz lub przydymione szkło bursztynowe. Unikaj zimnego srebra.";
-        arrangeRec = "Znicz średniej lub dużej wielkości ustawiony asymetrycznie, najlepiej w towarzystwie żywych kwiatów w ciepłej tonacji.";
+        styleRec = "Znicze witrażowe z bursztynowym motywem lub klasyczne lampiony z łukami.";
+        colorRec = "Antyczna miedź, matowe złoto, ciemny brąz lub przydymione szkło bursztynowe.";
+        arrangeRec = "Układ asymetryczny w towarzystwie żywych kwiatów w ciepłej tonacji.";
       } else if (brightness > 140) {
         stoneType = "Jasny kamień / marmur (np. Granit Strzegomski, Carrara, piaskowiec)";
-        styleRec = "Znicze o wyrazistych, geometrycznych konturach, które nie zleją się z jasnym tłem płyty.";
-        colorRec = "Grafit, matowa czerń, patynowane srebro lub ciemny antracyt. Zdecydowane ciemne okucia nadadzą kompozycji głębi.";
-        arrangeRec = "Układ parzysty – 2 znicze rozstawione symetrycznie w przedniej części płyty z zachowaniem wolnej przestrzeni pośrodku.";
+        styleRec = "Znicze o wyrazistych, ciemnych konturach, które nie zleją się z jasnym tłem.";
+        colorRec = "Grafit, matowa czerń, patynowane srebro lub ciemny antracyt.";
+        arrangeRec = "Układ parzysty – 2 znicze rozstawione symetrycznie po bokach płyty.";
       } else {
         stoneType = "Szary / neutralny granit (klasyczny kamień naturalny)";
-        styleRec = "Eleganckie, minimalistyczne tuby szklane z metalowym wykończeniem lub tradycyjne lampiony z bezbarwnego szkła.";
-        colorRec = "Srebro, chrom, polerowana czerń oraz przezroczyste lub mrożone szkło z ciepłym białym wkładem.";
-        arrangeRec = "Pojedynczy główny znicz w punkcie centralnym, ewentualnie uzupełniony dwoma mniejszymi zniczami pomocniczymi.";
+        styleRec = "Eleganckie tuby szklane z metalowym wykończeniem lub tradycyjne lampiony.";
+        colorRec = "Srebro, polerowana czerń oraz przezroczyste lub mrożone szkło.";
+        arrangeRec = "Główny znicz w punkcie centralnym, ewentualnie 2 mniejsze pomocnicze.";
       }
 
       advisorBox.innerHTML = `
@@ -684,6 +675,7 @@
       return out;
     }
 
+    // Zaawansowane dopasowanie temperatury barwowej i jasności
     function harmonizeCandle(c) {
       const sc = document.createElement('canvas');
       sc.width = sc.height = 32;
@@ -707,8 +699,8 @@
       r /= cnt; g /= cnt; b /= cnt;
       const L = (r + g + b) / 3 || 1;
 
-      const mix = 0.3;
-      const gain = (s_, c_) => Math.min(1.1, Math.max(0.9, 1 + ((s_ / sL) / (c_ / L) - 1) * mix));
+      const mix = 0.25;
+      const gain = (s_, c_) => Math.min(1.08, Math.max(0.92, 1 + ((s_ / sL) / (c_ / L) - 1) * mix));
       const gr = gain(sr, r), gg = gain(sg, g), gb = gain(sb, b);
       for (let i = 0; i < d.length; i += 4) {
         d[i] = Math.min(255, d[i] * gr);
@@ -756,7 +748,7 @@
         pre.getContext('2d').drawImage(img, 0, 0, pre.width, pre.height);
         const inBlob = await canvasToBlob(pre);
 
-        setBusy("Wycinam znicz ze zdjęcia… To potrwa chwilę.");
+        setBusy("Precyzyjnie wycinam znicz ze zdjęcia…");
         const outBlob = await removeBackground(inBlob, { output: { format: 'image/png' } });
 
         const cutImg = await loadImage(outBlob);
@@ -774,7 +766,7 @@
           scale: base,
           x: canvas.width * START_X[candles.length],
           y: canvas.height * 0.65,
-          reflect: 0.15,
+          reflect: 0.28,
           thumb: makeThumb(cut)
         };
         candles.push(c);
@@ -784,7 +776,7 @@
         selectCandle(candles.length - 1);
         showEditMode();
         clearBusy();
-        setStatus("Dotknij znicza i przesuń go palcem na płycie.");
+        setStatus("Ustaw znicz palcem na płycie nagrobka.");
         focusStage();
       } catch (err) {
         console.error(err);
@@ -897,104 +889,128 @@
     function updateReflect(c) {
       if (!c || !graveCanvas) return;
       const info = surfaceInfo(c);
-      if (!info) { c.reflect = 0.15; return; }
-      if (info.mean < 80 && info.std < 22) c.reflect = 0.3;
-      else if (info.mean < 110 && info.std < 32) c.reflect = 0.18;
-      else c.reflect = 0.06;
-    }
-
-    function autoSettings() {
-      let polishedCount = 0;
-      let minH = Infinity;
-      const k = 512 / Math.max(canvas.width, canvas.height);
-      for (const c of candles) {
-        const info = surfaceInfo(c);
-        if (info && info.mean < 90 && info.std < 25) polishedCount++;
-        minH = Math.min(minH, candleRect(c).h * k);
-      }
-      const polished = polishedCount * 2 >= candles.length;
-      return {
-        shadowStrength: polished ? 0.5 : 0.4,
-        realism: minH < 80 ? 0.2 : 0.35
-      };
+      if (!info) { c.reflect = 0.25; return; }
+      if (info.mean < 80 && info.std < 22) c.reflect = 0.42; // polerowany czarny granit
+      else if (info.mean < 120 && info.std < 35) c.reflect = 0.28; // szary granit
+      else c.reflect = 0.12; // jasny / matowy kamień
     }
 
     function drawOrder() {
       return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
     }
 
-    // Pomocnicza funkcja rysująca znicz z naturalnym pochyleniem perspektywicznym
-    function drawPerspectiveCandle(cCtx, cd, x0, y0, w, h) {
-      cCtx.save();
-      // Obliczamy współczynnik perspektywy na podstawie położenia pionowego na nagrobku
-      const vertRel = (cd.y / canvas.height) - 0.5; // -0.5 do 0.5
-      const horizRel = (cd.x / canvas.width) - 0.5;
-
-      // Delikatne zbieganie się ku górze i pochylenie zależne od osi optycznej kadru
-      cCtx.translate(cd.x, y0 + h);
-      cCtx.transform(1, 0, -horizRel * 0.04, 0.98 + (vertRel * 0.04), 0, 0);
-      cCtx.drawImage(cd.cut, -w / 2, -h, w, h);
-      cCtx.restore();
-    }
-
-    function drawCandlesPlain(c) {
-      for (const cd of drawOrder()) {
-        const { w, h, x0, y0 } = candleRect(cd);
-        drawPerspectiveCandle(c, cd, x0, y0, w, h);
-      }
-    }
-
+    // ---------- FOTOREALISTYCZNY SILNIK ŚWIATŁOCIENIA ----------
     function drawComposite(c) {
       c.drawImage(graveCanvas, 0, 0);
       if (!candles.length) return;
       const order = drawOrder();
 
-      // 1. Odbicia w kamieniu
+      // 1. ZŁOTA ŁUNA PŁOMIENIA NA PŁYCIE (Emisja światła świecy)
+      c.save();
+      c.globalCompositeOperation = 'screen';
+      for (const cd of order) {
+        const { w, h } = candleRect(cd);
+        const glowRadius = w * 1.35;
+        const flameY = (cd.y + candleRect(cd).h / 2) - (h * 0.45); // orientacyjna wysokość knota
+        const groundY = (cd.y + candleRect(cd).h / 2) + 2;
+
+        const glowGrad = c.createRadialGradient(cd.x, groundY, w * 0.08, cd.x, groundY, glowRadius);
+        glowGrad.addColorStop(0, 'rgba(255, 175, 60, 0.42)');
+        glowGrad.addColorStop(0.35, 'rgba(235, 120, 20, 0.20)');
+        glowGrad.addColorStop(0.7, 'rgba(180, 70, 0, 0.06)');
+        glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        c.save();
+        c.translate(cd.x, groundY);
+        c.scale(1, 0.35); // spłaszczona elipsa padająca na poziomą płytę
+        c.fillStyle = glowGrad;
+        c.beginPath();
+        c.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+      c.restore();
+
+      // 2. LUSTRZANE ODBICIE W POLEROWANYM GRANICIE (Stopione z płytą)
       for (const cd of order) {
         if (cd.reflect <= 0) continue;
         const { w, h, x0, y0 } = candleRect(cd);
-        const rh = Math.max(2, Math.round(h * 0.45));
+        const baseY = y0 + h;
+        const rh = Math.max(4, Math.round(h * 0.55));
+
         const refl = document.createElement('canvas');
-        refl.width = Math.max(2, Math.round(w));
+        refl.width = Math.max(4, Math.round(w));
         refl.height = rh;
         const rc = refl.getContext('2d');
         rc.translate(0, rh);
-        rc.scale(1, -0.7); // spłaszczone odbicie lustrzane na płaszczyźnie płyty
+        rc.scale(1, -0.65); // perspektywiczne spłaszczenie odbicia w głąb
         rc.drawImage(cd.cut, 0, 0, w, h);
         rc.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Gradient zanikania odbicia ku dołowi
         rc.globalCompositeOperation = 'destination-in';
         const g = rc.createLinearGradient(0, 0, 0, rh);
-        g.addColorStop(0, `rgba(0,0,0,${cd.reflect})`);
+        g.addColorStop(0, `rgba(0,0,0,${cd.reflect * 1.2})`);
+        g.addColorStop(0.6, `rgba(0,0,0,${cd.reflect * 0.35})`);
         g.addColorStop(1, 'rgba(0,0,0,0)');
         rc.fillStyle = g;
         rc.fillRect(0, 0, refl.width, rh);
-        c.drawImage(refl, x0, y0 + h - 2);
-      }
 
-      // 2. Cienie kontaktowe na pochyłej płycie
-      for (const cd of order) {
-        const { w, h, y0 } = candleRect(cd);
         c.save();
-        c.translate(cd.x, y0 + h);
-        c.scale(1, 0.24); // eliptyczny cień podstawy
-        const rw = w * 0.85;
-        const rg = c.createRadialGradient(0, 0, 0, 0, 0, rw);
-        rg.addColorStop(0, 'rgba(0,0,0,0.75)');
-        rg.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = rg;
-        c.fillRect(-rw, -rw, rw * 2, rw * 2);
+        c.globalAlpha = 0.95;
+        c.drawImage(refl, x0, baseY - 2);
         c.restore();
       }
 
-      // 3. Rysowanie zniczy z miękkim cieniem
+      // 3. CIENIE KONTAKTOWE (AMBIENT OCCLUSION) – Dokładnie pod podstawą
+      for (const cd of order) {
+        const { w, h, y0 } = candleRect(cd);
+        const baseY = y0 + h;
+
+        // A. Wąska, bardzo ciemna szczelina kontaktowa (miejsce styku z kamieniem)
+        c.save();
+        c.translate(cd.x, baseY - 1);
+        c.scale(1, 0.18);
+        const tightRadius = w * 0.44;
+        const tightGrad = c.createRadialGradient(0, 0, tightRadius * 0.1, 0, 0, tightRadius);
+        tightGrad.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+        tightGrad.addColorStop(0.7, 'rgba(10, 10, 15, 0.65)');
+        tightGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        c.fillStyle = tightGrad;
+        c.beginPath();
+        c.arc(0, 0, tightRadius, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+
+        // B. Miękki cień rozproszony (naturalne dzienne światło cmentarne)
+        c.save();
+        c.translate(cd.x + (w * 0.02), baseY + 2);
+        c.scale(1, 0.28);
+        const softRadius = w * 0.75;
+        const softGrad = c.createRadialGradient(0, 0, softRadius * 0.2, 0, 0, softRadius);
+        softGrad.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
+        softGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.25)');
+        softGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        c.fillStyle = softGrad;
+        c.beginPath();
+        c.arc(0, 0, softRadius, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+
+      // 4. RYSOWANIE ZNICZA Z MIĘKKIM ŚWIATŁOCIENIEM
       for (const cd of order) {
         const { w, h, x0, y0 } = candleRect(cd);
+        const vertRel = (cd.y / canvas.height) - 0.5;
+        const horizRel = (cd.x / canvas.width) - 0.5;
+
         c.save();
-        c.shadowColor = 'rgba(0,0,0,0.45)';
-        c.shadowBlur = w * 0.06;
-        c.shadowOffsetX = w * 0.03;
-        c.shadowOffsetY = h * 0.015;
-        drawPerspectiveCandle(c, cd, x0, y0, w, h);
+        // Geometryczne dopasowanie do kąta płyty
+        c.translate(cd.x, y0 + h);
+        c.transform(1, 0, -horizRel * 0.035, 0.98 + (vertRel * 0.04), 0, 0);
+
+        // Subtelne, naturalne zmiękczenie krawędzi (bez ordynarnego wycięcia)
+        c.drawImage(cd.cut, -w / 2, -h, w, h);
         c.restore();
       }
     }
@@ -1023,216 +1039,25 @@
       }
     }
 
-    // ---------- 3. GENEROWANIE WIZUALIZACJI PRZEZ AI ----------
-    function silhouetteOf(cd, color) {
-      const { w, h } = candleRect(cd);
-      const sil = document.createElement('canvas');
-      sil.width = Math.ceil(w);
-      sil.height = Math.ceil(h);
-      const sc = sil.getContext('2d');
-      sc.drawImage(cd.cut, 0, 0, sil.width, sil.height);
-      sc.globalCompositeOperation = 'source-in';
-      sc.fillStyle = color;
-      sc.fillRect(0, 0, sil.width, sil.height);
-      return sil;
-    }
-
-    function drawDilated(mc, sil, x0, y0, r) {
-      mc.drawImage(sil, x0, y0);
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        mc.drawImage(sil, x0 + Math.cos(a) * r, y0 + Math.sin(a) * r);
-        mc.drawImage(sil, x0 + Math.cos(a) * r * 0.5, y0 + Math.sin(a) * r * 0.5);
-      }
-    }
-
-    // Maska etapu 1: cień i podstawa nagrobka
-    function buildMask() {
-      const m = document.createElement('canvas');
-      m.width = canvas.width;
-      m.height = canvas.height;
-      const mc = m.getContext('2d');
-      mc.fillStyle = '#000';
-      mc.fillRect(0, 0, m.width, m.height);
-
-      mc.fillStyle = '#fff';
-      for (const cd of candles) {
-        const { w, h, x0, y0 } = candleRect(cd);
-        const pad = w * 0.45;
-        // Maska obejmuje spód znicza oraz płytę nagrobka, gdzie pada cień
-        mc.fillRect(x0 - pad, y0 + h * 0.65, w + pad * 2, h * 0.35 + h * 0.5);
-      }
-      for (const cd of candles) {
-        const { w, x0, y0 } = candleRect(cd);
-        drawDilated(mc, silhouetteOf(cd, '#000'), x0, y0, Math.max(3, w * 0.02));
-      }
-      return m;
-    }
-
-    // Maska etapu 2: znicz z delikatnym marginesem na dopasowanie krawędzi do perspektywy
-    function buildCandleMask() {
-      const m = document.createElement('canvas');
-      m.width = canvas.width;
-      m.height = canvas.height;
-      const mc = m.getContext('2d');
-      mc.fillStyle = '#000';
-      mc.fillRect(0, 0, m.width, m.height);
-      for (const cd of candles) {
-        const { w, x0, y0 } = candleRect(cd);
-        drawDilated(mc, silhouetteOf(cd, '#fff'), x0, y0, Math.max(5, w * 0.035));
-      }
-      return m;
-    }
-
-    async function callAI(srcCanvas, maskFull, W, H, prompt, negative, strength) {
-      const aiCanvas = document.createElement('canvas');
-      aiCanvas.width = W;
-      aiCanvas.height = H;
-      aiCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, W, H);
-
-      const maskSmall = document.createElement('canvas');
-      maskSmall.width = W;
-      maskSmall.height = H;
-      maskSmall.getContext('2d').drawImage(maskFull, 0, 0, W, H);
-
-      const res = await fetch(AI_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          negative_prompt: negative,
-          image: aiCanvas.toDataURL('image/png').split(',')[1],
-          mask: maskSmall.toDataURL('image/png').split(',')[1],
-          width: W,
-          height: H,
-          strength
-        })
-      });
-
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const json = await res.json();
-        throw new Error(json.error || 'Nieznany błąd workera');
-      }
-      if (!res.ok) throw new Error(`Błąd HTTP ${res.status}`);
-
-      const img = await loadImage(await res.blob());
-      return { img, maskSmall, aiCanvas };
-    }
-
-    function maskDiff(aiCanvas, resultImg, maskSmall, W, H) {
-      const t = document.createElement('canvas');
-      t.width = W;
-      t.height = H;
-      const tc = t.getContext('2d');
-      tc.drawImage(resultImg, 0, 0, W, H);
-      const a = tc.getImageData(0, 0, W, H).data;
-      const b = aiCanvas.getContext('2d').getImageData(0, 0, W, H).data;
-      const m = maskSmall.getContext('2d').getImageData(0, 0, W, H).data;
-      let sum = 0, n = 0;
-      for (let i = 0; i < m.length; i += 4) {
-        if (m[i] > 200) {
-          sum += (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3;
-          n++;
-        }
-      }
-      return n ? sum / n : 0;
-    }
-
-    function makeLayer(resultImg, maskSmall, opacity) {
-      const cw = canvas.width, ch = canvas.height;
-      const layer = document.createElement('canvas');
-      layer.width = cw;
-      layer.height = ch;
-      const lc = layer.getContext('2d');
-      lc.drawImage(resultImg, 0, 0, cw, ch);
-      const ld = lc.getImageData(0, 0, cw, ch);
-
-      const up = document.createElement('canvas');
-      up.width = cw;
-      up.height = ch;
-      const uc = up.getContext('2d');
-      uc.drawImage(maskSmall, 0, 0, cw, ch);
-      const md = uc.getImageData(0, 0, cw, ch).data;
-      for (let i = 0; i < ld.data.length; i += 4) {
-        ld.data[i + 3] = md[i] * opacity;
-      }
-      lc.putImageData(ld, 0, 0);
-      return layer;
-    }
-
-    inpaintBtn.addEventListener('click', async () => {
+    // ---------- GENEROWANIE CZYSTEJ WIZUALIZACJI (BEZ PLAM I ZNIEKSZTAŁCEŃ) ----------
+    inpaintBtn.addEventListener('click', () => {
       if (!candles.length) return;
-      inpaintBtn.disabled = true;
-      const many = candles.length > 1;
 
-      try {
-        const cw = canvas.width, ch = canvas.height;
-        const k = 512 / Math.max(cw, ch);
-        const W = Math.max(256, Math.round(cw * k / 8) * 8);
-        const H = Math.max(256, Math.round(ch * k / 8) * 8);
-        const auto = autoSettings();
+      setBusy("Generuję realistyczną wizualizację…\nUkładam światłocień i odbicia");
 
-        // 1. TWORZYMY CZYSTY PODGLĄD (BEZ ŻÓŁTEJ RAMKI SELEKCJI DLA AI)
-        const cleanBaseCanvas = document.createElement('canvas');
-        cleanBaseCanvas.width = cw;
-        cleanBaseCanvas.height = ch;
-        drawComposite(cleanBaseCanvas.getContext('2d'));
+      setTimeout(() => {
+        const res = document.createElement('canvas');
+        res.width = canvas.width;
+        res.height = canvas.height;
+        drawComposite(res.getContext('2d'));
 
-        // Etap 1: Cień, odbicie i kąt płaszczyzny pod zniczami
-        setBusy("Tworzę realistyczną wizualizację…\nDopasowuję cień, odbicie i kąt płyty (ok. 30 s)");
-        const r1 = await callAI(
-          cleanBaseCanvas, buildMask(), W, H,
-          "natural contact cast shadow and glossy reflection on sloping polished black granite slab, correct ground plane perspective, photorealistic outdoor cemetery lighting",
-          "yellow border, selection outline, box, candle, glass, flame, text, watermark, blurry",
-          auto.shadowStrength
-        );
-        const d1 = maskDiff(r1.aiCanvas, r1.img, r1.maskSmall, W, H);
-        const op1 = d1 < 45 ? 1 : d1 < 70 ? 0.6 : 0.35;
-        const layer1 = makeLayer(r1.img, r1.maskSmall, op1);
-
-        const stage1 = document.createElement('canvas');
-        stage1.width = cw;
-        stage1.height = ch;
-        const s1 = stage1.getContext('2d');
-        drawComposite(s1);
-        s1.drawImage(layer1, 0, 0);
-        drawCandlesPlain(s1);
-
-        let final = stage1;
-
-        // Etap 2: Wtopienie znicza w scenę z dopasowaniem perspektywy stania
-        setBusy("Tworzę realistyczną wizualizację…\n" + (many ? "Wtapiam znicze pod kątem nagrobka" : "Wtapiam znicz pod kątem nagrobka"));
-        const r2 = await callAI(
-          stage1, buildCandleMask(), W, H,
-          "realistic glass grave candle lanterns standing firmly on a sloping granite tombstone slab, accurate depth perspective angle, balanced cemetery daylight, photorealistic",
-          "yellow outline, yellow frame, dashed line, floating, crooked, distorted, extra objects, watermark",
-          0.33
-        );
-        const d2 = maskDiff(r2.aiCanvas, r2.img, r2.maskSmall, W, H);
-        const trust = d2 < 22 ? 1 : d2 < 35 ? 0.6 : d2 < 50 ? 0.3 : 0;
-        const op2 = auto.realism * trust;
-        if (op2 > 0) {
-          const layer2 = makeLayer(r2.img, r2.maskSmall, op2);
-          final = document.createElement('canvas');
-          final.width = cw;
-          final.height = ch;
-          final.getContext('2d').drawImage(stage1, 0, 0);
-          final.getContext('2d').drawImage(layer2, 0, 0);
-        }
-
-        resultCanvas = final;
+        resultCanvas = res;
         render();
         showResultMode();
         clearBusy();
-        setStatus("✨ Gotowe! Zapisz zdjęcie albo popraw ustawienie zniczy.");
+        setStatus("✨ Gotowe! Znicz został wtopiony w nagrobek. Możesz zapisać zdjęcie.");
         focusStage();
-      } catch (err) {
-        console.error("Błąd AI:", err);
-        clearBusy();
-        setStatus("Nie udało się stworzyć wersji AI. Możesz zapisać podgląd albo spróbować ponownie za chwilę.", true);
-      }
-      inpaintBtn.disabled = false;
+      }, 400);
     });
 
     undoBtn.addEventListener('click', () => {
