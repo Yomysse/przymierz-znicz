@@ -125,7 +125,6 @@
       border-color: rgba(245, 194, 107, 0.4);
     }
 
-    /* Przycisk doradcy dopasowany do stylistyki zniczy */
     .btn-advisor {
       background: linear-gradient(180deg, rgba(245, 194, 107, 0.18), rgba(217, 143, 43, 0.08));
       border: 1px solid rgba(245, 194, 107, 0.38);
@@ -201,12 +200,8 @@
       margin: 6px 0 12px;
       border: 1px solid rgba(245, 194, 107, 0.25);
     }
-    .rec-item {
-      margin-bottom: 10px;
-    }
-    .rec-item:last-child {
-      margin-bottom: 0;
-    }
+    .rec-item { margin-bottom: 10px; }
+    .rec-item:last-child { margin-bottom: 0; }
     .rec-item strong {
       color: #fbe9c4;
       display: block;
@@ -386,7 +381,7 @@
     <input type="file" id="input-grave-camera" accept="image/*" capture="environment">
     <input type="file" id="input-grave" accept="image/*">
 
-    <!-- Przycisk inteligentnego doradcy ze zwijaniem -->
+    <!-- Doradca kompozycji -->
     <button class="btn btn-advisor" id="advisor-btn" style="display: none;">
       💡 Doradź, jakie znicze pasują
     </button>
@@ -448,6 +443,8 @@
   </div>
 
   <script>
+    // ---------- ADRES WORKERA AI ----------
+    const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
     const MAX_CANDLE = 1024;
@@ -559,7 +556,7 @@
         advisorBox.innerHTML = '';
         advisorGenerated = false;
 
-        setStatus("Świetnie! Możesz sprawdzić rekomendację lub dodać znicz.");
+        setStatus("Świetnie! Sprawdź rekomendację lub dodaj zdjęcie znicza.");
       } catch (err) {
         setStatus("Nie udało się wczytać zdjęcia. Spróbuj wybrać inne.", true);
       }
@@ -568,18 +565,18 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-    // ---------- INTELIGENTNY DORADCA ZE ZWIJANIEM / ROZWIJANIEM ----------
+    // ---------- INTELIGENTNY DORADCA ZE ZWIJANIEM ----------
     advisorBtn.addEventListener('click', () => {
       if (!graveCanvas) return;
 
-      // 1. Jeśli okno jest już otwarte – zwijamy (minimalizujemy)
+      // Zwijanie, jeśli już otwarte
       if (advisorBox.style.display === 'block') {
         advisorBox.style.display = 'none';
         advisorBtn.innerText = "💡 Pokaż rekomendację zniczy";
         return;
       }
 
-      // 2. Jeśli było wcześniej wygenerowane i tylko zwinięte – rozwijamy bez powtórnej analizy
+      // Rozwijanie wcześniej wyliczonej porady
       if (advisorGenerated) {
         advisorBox.style.display = 'block';
         advisorBtn.innerText = "🔼 Zwiń rekomendację zniczy";
@@ -587,7 +584,7 @@
         return;
       }
 
-      // 3. Pierwsze kliknięcie – badanie parametrów płyty
+      // Analiza próbki płyty
       const sampleW = 60;
       const sampleH = 40;
       const sc = document.createElement('canvas');
@@ -912,8 +909,31 @@
       else c.reflect = 0.06;
     }
 
+    function autoSettings() {
+      let polishedCount = 0;
+      let minH = Infinity;
+      const k = 512 / Math.max(canvas.width, canvas.height);
+      for (const c of candles) {
+        const info = surfaceInfo(c);
+        if (info && info.mean < 90 && info.std < 25) polishedCount++;
+        minH = Math.min(minH, candleRect(c).h * k);
+      }
+      const polished = polishedCount * 2 >= candles.length;
+      return {
+        shadowStrength: polished ? 0.5 : 0.4,
+        realism: minH < 80 ? 0.2 : 0.35
+      };
+    }
+
     function drawOrder() {
       return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
+    }
+
+    function drawCandlesPlain(c) {
+      for (const cd of drawOrder()) {
+        const { w, h, x0, y0 } = candleRect(cd);
+        c.drawImage(cd.cut, x0, y0, w, h);
+      }
     }
 
     function drawComposite(c) {
@@ -995,18 +1015,208 @@
       }
     }
 
-    // 3. Wtapianie wizualne
-    inpaintBtn.addEventListener('click', () => {
+    // ---------- 3. GENEROWANIE WIZUALIZACJI PRZEZ AI ----------
+    function silhouetteOf(cd, color) {
+      const { w, h } = candleRect(cd);
+      const sil = document.createElement('canvas');
+      sil.width = Math.ceil(w);
+      sil.height = Math.ceil(h);
+      const sc = sil.getContext('2d');
+      sc.drawImage(cd.cut, 0, 0, sil.width, sil.height);
+      sc.globalCompositeOperation = 'source-in';
+      sc.fillStyle = color;
+      sc.fillRect(0, 0, sil.width, sil.height);
+      return sil;
+    }
+
+    function drawDilated(mc, sil, x0, y0, r) {
+      mc.drawImage(sil, x0, y0);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        mc.drawImage(sil, x0 + Math.cos(a) * r, y0 + Math.sin(a) * r);
+        mc.drawImage(sil, x0 + Math.cos(a) * r * 0.5, y0 + Math.sin(a) * r * 0.5);
+      }
+    }
+
+    function buildMask() {
+      const m = document.createElement('canvas');
+      m.width = canvas.width;
+      m.height = canvas.height;
+      const mc = m.getContext('2d');
+      mc.fillStyle = '#000';
+      mc.fillRect(0, 0, m.width, m.height);
+
+      mc.fillStyle = '#fff';
+      for (const cd of candles) {
+        const { w, h, x0, y0 } = candleRect(cd);
+        const pad = w * 0.4;
+        mc.fillRect(x0 - pad, y0 + h * 0.6, w + pad * 2, h * 0.4 + h * 0.5);
+      }
+      for (const cd of candles) {
+        const { w, x0, y0 } = candleRect(cd);
+        drawDilated(mc, silhouetteOf(cd, '#000'), x0, y0, Math.max(3, w * 0.02));
+      }
+      return m;
+    }
+
+    function buildCandleMask() {
+      const m = document.createElement('canvas');
+      m.width = canvas.width;
+      m.height = canvas.height;
+      const mc = m.getContext('2d');
+      mc.fillStyle = '#000';
+      mc.fillRect(0, 0, m.width, m.height);
+      for (const cd of candles) {
+        const { w, x0, y0 } = candleRect(cd);
+        drawDilated(mc, silhouetteOf(cd, '#fff'), x0, y0, Math.max(4, w * 0.03));
+      }
+      return m;
+    }
+
+    async function callAI(srcCanvas, maskFull, W, H, prompt, negative, strength) {
+      const aiCanvas = document.createElement('canvas');
+      aiCanvas.width = W;
+      aiCanvas.height = H;
+      aiCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, W, H);
+
+      const maskSmall = document.createElement('canvas');
+      maskSmall.width = W;
+      maskSmall.height = H;
+      maskSmall.getContext('2d').drawImage(maskFull, 0, 0, W, H);
+
+      const res = await fetch(AI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          negative_prompt: negative,
+          image: aiCanvas.toDataURL('image/png').split(',')[1],
+          mask: maskSmall.toDataURL('image/png').split(',')[1],
+          width: W,
+          height: H,
+          strength
+        })
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const json = await res.json();
+        throw new Error(json.error || 'Nieznany błąd workera');
+      }
+      if (!res.ok) throw new Error(`Błąd HTTP ${res.status}`);
+
+      const img = await loadImage(await res.blob());
+      return { img, maskSmall, aiCanvas };
+    }
+
+    function maskDiff(aiCanvas, resultImg, maskSmall, W, H) {
+      const t = document.createElement('canvas');
+      t.width = W;
+      t.height = H;
+      const tc = t.getContext('2d');
+      tc.drawImage(resultImg, 0, 0, W, H);
+      const a = tc.getImageData(0, 0, W, H).data;
+      const b = aiCanvas.getContext('2d').getImageData(0, 0, W, H).data;
+      const m = maskSmall.getContext('2d').getImageData(0, 0, W, H).data;
+      let sum = 0, n = 0;
+      for (let i = 0; i < m.length; i += 4) {
+        if (m[i] > 200) {
+          sum += (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3;
+          n++;
+        }
+      }
+      return n ? sum / n : 0;
+    }
+
+    function makeLayer(resultImg, maskSmall, opacity) {
+      const cw = canvas.width, ch = canvas.height;
+      const layer = document.createElement('canvas');
+      layer.width = cw;
+      layer.height = ch;
+      const lc = layer.getContext('2d');
+      lc.drawImage(resultImg, 0, 0, cw, ch);
+      const ld = lc.getImageData(0, 0, cw, ch);
+
+      const up = document.createElement('canvas');
+      up.width = cw;
+      up.height = ch;
+      const uc = up.getContext('2d');
+      uc.drawImage(maskSmall, 0, 0, cw, ch);
+      const md = uc.getImageData(0, 0, cw, ch).data;
+      for (let i = 0; i < ld.data.length; i += 4) {
+        ld.data[i + 3] = md[i] * opacity;
+      }
+      lc.putImageData(ld, 0, 0);
+      return layer;
+    }
+
+    // Kliknięcie w przycisk AI
+    inpaintBtn.addEventListener('click', async () => {
       if (!candles.length) return;
-      const res = document.createElement('canvas');
-      res.width = canvas.width;
-      res.height = canvas.height;
-      drawComposite(res.getContext('2d'));
-      resultCanvas = res;
-      render();
-      showResultMode();
-      setStatus("✨ Gotowe! Zapisz zdjęcie albo kliknij Popraw.");
-      focusStage();
+      inpaintBtn.disabled = true;
+      const many = candles.length > 1;
+
+      try {
+        const cw = canvas.width, ch = canvas.height;
+        const k = 512 / Math.max(cw, ch);
+        const W = Math.max(256, Math.round(cw * k / 8) * 8);
+        const H = Math.max(256, Math.round(ch * k / 8) * 8);
+        const auto = autoSettings();
+
+        // Etap 1: cień i odbicie pod zniczami
+        setBusy("Tworzę realistyczną wizualizację…\nDopasowuję cień i odbicie (ok. 30 s)");
+        const r1 = await callAI(
+          canvas, buildMask(), W, H,
+          "soft natural shadows and glossy reflections on polished black granite slab, empty stone surface, photorealistic, outdoor daylight",
+          "candle, lantern, glass, flame, object, text, watermark, blurry, deformed",
+          auto.shadowStrength
+        );
+        const d1 = maskDiff(r1.aiCanvas, r1.img, r1.maskSmall, W, H);
+        const op1 = d1 < 45 ? 1 : d1 < 70 ? 0.6 : 0.35;
+        const layer1 = makeLayer(r1.img, r1.maskSmall, op1);
+
+        const stage1 = document.createElement('canvas');
+        stage1.width = cw;
+        stage1.height = ch;
+        const s1 = stage1.getContext('2d');
+        drawComposite(s1);
+        s1.drawImage(layer1, 0, 0);
+        drawCandlesPlain(s1);
+
+        let final = stage1;
+
+        // Etap 2: wtopienie zniczy w scenę
+        setBusy("Tworzę realistyczną wizualizację…\n" + (many ? "Wtapiam znicze w scenę" : "Wtapiam znicz w scenę"));
+        const r2 = await callAI(
+          stage1, buildCandleMask(), W, H,
+          "realistic glass grave candle lanterns on a black granite tombstone in a cemetery, natural outdoor daylight, consistent lighting, photorealistic, same objects",
+          "different object, deformed, extra objects, text, watermark, blurry",
+          0.35
+        );
+        const d2 = maskDiff(r2.aiCanvas, r2.img, r2.maskSmall, W, H);
+        const trust = d2 < 22 ? 1 : d2 < 35 ? 0.6 : d2 < 50 ? 0.3 : 0;
+        const op2 = auto.realism * trust;
+        if (op2 > 0) {
+          const layer2 = makeLayer(r2.img, r2.maskSmall, op2);
+          final = document.createElement('canvas');
+          final.width = cw;
+          final.height = ch;
+          final.getContext('2d').drawImage(stage1, 0, 0);
+          final.getContext('2d').drawImage(layer2, 0, 0);
+        }
+
+        resultCanvas = final;
+        render();
+        showResultMode();
+        clearBusy();
+        setStatus("✨ Gotowe! Zapisz zdjęcie albo popraw ustawienie zniczy.");
+        focusStage();
+      } catch (err) {
+        console.error("Błąd AI:", err);
+        clearBusy();
+        setStatus("Nie udało się stworzyć wersji AI. Możesz zapisać podgląd albo spróbować ponownie za chwilę.", true);
+      }
+      inpaintBtn.disabled = false;
     });
 
     undoBtn.addEventListener('click', () => {
