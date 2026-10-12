@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Przymierz Znicz</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.js"></script>
-
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -19,7 +17,7 @@
       min-height: 100vh;
       padding: 16px;
     }
-    h1 { font-size: 1.3rem; margin-bottom: 12px; font-weight: 700; }
+    h1 { font-size: 1.3rem; margin-bottom: 12px; font-weight: 700; text-align: center; }
 
     .step-container {
       width: 100%;
@@ -42,7 +40,6 @@
       text-align: center;
       cursor: pointer;
       user-select: none;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
     }
     .btn:disabled { background: #374151; color: #9ca3af; cursor: not-allowed; }
     .btn-ai { background: #7c3aed; }
@@ -77,7 +74,7 @@
       margin-top: 14px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
     }
     .slider-row {
       display: flex;
@@ -86,7 +83,7 @@
       font-size: 0.85rem;
       color: #cbd5e1;
     }
-    .slider-row input { width: 65%; accent-color: #2563eb; }
+    .slider-row input { width: 60%; accent-color: #2563eb; }
   </style>
 </head>
 <body>
@@ -94,13 +91,11 @@
   <h1>Wizualizator Znicza</h1>
 
   <div class="step-container">
-    <!-- Krok 1: Nagrobek -->
     <label class="btn" for="input-grave" id="btn-grave-label">
       📸 1. Dodaj zdjęcie nagrobka
     </label>
     <input type="file" id="input-grave" accept="image/*">
 
-    <!-- Krok 2: Znicz (odblokowuje się po kroku 1) -->
     <label class="btn" for="input-candle" id="btn-candle-label" style="display: none; background: #0284c7;">
       🕯️ 2. Wybierz lub zrób zdjęcie znicza
     </label>
@@ -113,11 +108,15 @@
     <canvas id="stage"></canvas>
   </div>
 
-  <!-- Panel dostosowania i generowania AI -->
   <div class="controls" id="edit-controls" style="display: none;">
     <div class="slider-row">
       <label for="scale-slider">Wielkość znicza:</label>
       <input type="range" id="scale-slider" min="0.1" max="1.5" step="0.05" value="0.45">
+    </div>
+
+    <div class="slider-row">
+      <label for="threshold-slider">Wycięcie tła:</label>
+      <input type="range" id="threshold-slider" min="150" max="250" step="1" value="215">
     </div>
 
     <button class="btn btn-ai" id="inpaint-btn">✨ Generuj realistyczną wizualizację (AI)</button>
@@ -125,7 +124,6 @@
   </div>
 
   <script>
-    // WKLEJ TUTAJ ADRES SWOJEGO WORKERA Z KROKU 1:
     const WORKER_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
 
     const statusEl = document.getElementById('status');
@@ -139,18 +137,21 @@
     const inpaintBtn = document.getElementById('inpaint-btn');
     const downloadBtn = document.getElementById('download-btn');
     const scaleSlider = document.getElementById('scale-slider');
+    const thresholdSlider = document.getElementById('threshold-slider');
 
     let graveImg = null;
-    let candleCutImg = null;
+    let candleRawImg = null;
+    let candleCutCanvas = null;
 
     let candleState = {
       x: 0,
       y: 0,
       scale: 0.45,
+      threshold: 215,
       isDragging: false
     };
 
-    // 1. Dodanie zdjęcia nagrobka
+    // 1. Zdjęcie nagrobka
     inputGrave.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -168,37 +169,49 @@
       graveImg.src = url;
     });
 
-    // 2. Dodanie zdjęcia znicza + AI wycinanie w locie
-    inputCandle.addEventListener('change', async (e) => {
+    // 2. Zdjęcie znicza
+    inputCandle.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      statusEl.innerText = "⏳ AI precyzyjnie wycina znicz z tła...";
-      btnCandleLabel.style.pointerEvents = 'none';
+      statusEl.innerText = "Przetwarzanie znicza...";
+      const url = URL.createObjectURL(file);
 
-      try {
-        const blob = await imglyRemoveBackground(file, {
-  publicPath: "https://staticimgly.com/@imgly/background-removal-data@1.4.5/dist/"
-});
-        const cutUrl = URL.createObjectURL(blob);
+      candleRawImg = new Image();
+      candleRawImg.onload = () => {
+        candleState.x = canvas.width / 2;
+        candleState.y = canvas.height * 0.65;
+        processCandleCut();
 
-        candleCutImg = new Image();
-        candleCutImg.onload = () => {
-          candleState.x = canvas.width / 2;
-          candleState.y = canvas.height * 0.65;
-          editControls.style.display = 'flex';
-          statusEl.innerText = "Ustaw znicz palcem w odpowiednim miejscu na płycie nagrobka.";
-          render();
-          btnCandleLabel.style.pointerEvents = 'auto';
-        };
-        candleCutImg.src = cutUrl;
-      } catch (err) {
-        statusEl.innerText = "Nie udało się wyciąć tła. Spróbuj innego zdjęcia.";
-        btnCandleLabel.style.pointerEvents = 'auto';
-      }
+        editControls.style.display = 'flex';
+        statusEl.innerText = "Przesuń znicz palcem na płytę nagrobka.";
+      };
+      candleRawImg.src = url;
     });
 
-    // Rysowanie na canvasie
+    function processCandleCut() {
+      if (!candleRawImg) return;
+      candleCutCanvas = document.createElement('canvas');
+      candleCutCanvas.width = candleRawImg.naturalWidth;
+      candleCutCanvas.height = candleRawImg.naturalHeight;
+
+      const cCtx = candleCutCanvas.getContext('2d');
+      cCtx.drawImage(candleRawImg, 0, 0);
+
+      const imgData = cCtx.getImageData(0, 0, candleCutCanvas.width, candleCutCanvas.height);
+      const data = imgData.data;
+      const th = candleState.threshold;
+
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] >= th && data[i + 1] >= th && data[i + 2] >= th) {
+          data[i + 3] = 0;
+        }
+      }
+
+      cCtx.putImageData(imgData, 0, 0);
+      render();
+    }
+
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -206,21 +219,21 @@
         ctx.drawImage(graveImg, 0, 0, canvas.width, canvas.height);
       }
 
-      if (candleCutImg) {
-        const w = candleCutImg.naturalWidth * candleState.scale;
-        const h = candleCutImg.naturalHeight * candleState.scale;
+      if (candleCutCanvas) {
+        const w = candleCutCanvas.width * candleState.scale;
+        const h = candleCutCanvas.height * candleState.scale;
         const drawX = candleState.x - w / 2;
         const drawY = candleState.y - h / 2;
 
-        ctx.drawImage(candleCutImg, drawX, drawY, w, h);
+        ctx.drawImage(candleCutCanvas, drawX, drawY, w, h);
       }
     }
 
-    // 3. Generowanie podglądu przez Cloudflare AI
+    // 3. Wtapianie AI (Cloudflare Workers AI)
     inpaintBtn.addEventListener('click', async () => {
-      if (!candleCutImg) return;
+      if (!candleCutCanvas) return;
 
-      statusEl.innerText = "⏳ AI wtapia znicz w nagrobek (światło, cienie i odbicia)...";
+      statusEl.innerText = "⏳ Generowanie realistycznego cienia i światła przez AI...";
       inpaintBtn.disabled = true;
 
       try {
@@ -231,8 +244,8 @@
         mCtx.fillStyle = '#000000';
         mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
 
-        const w = candleCutImg.naturalWidth * candleState.scale;
-        const h = candleCutImg.naturalHeight * candleState.scale;
+        const w = candleCutCanvas.width * candleState.scale;
+        const h = candleCutCanvas.height * candleState.scale;
         const drawX = candleState.x - w / 2;
         const drawY = candleState.y - h / 2;
 
@@ -248,25 +261,26 @@
         formData.append('image', origBlob);
         formData.append('mask', maskBlob);
 
-        const res = await fetch(WORKER_URL, {
+        const res = await fetch(`${WORKER_URL}?action=inpaint`, {
           method: 'POST',
           body: formData
         });
 
-        if (!res.ok) throw new Error("Błąd serwera AI");
+        if (!res.ok) throw new Error("Błąd serwera AI: " + res.statusText);
 
         const resultBlob = await res.blob();
         const resultImg = new Image();
         resultImg.onload = () => {
           graveImg = resultImg;
-          candleCutImg = null;
+          candleCutCanvas = null;
           render();
-          statusEl.innerText = "Gotowe! Możesz teraz pobrać wizualizację.";
+          statusEl.innerText = "Wizualizacja gotowa! Możesz pobrać zdjęcie.";
           inpaintBtn.disabled = false;
         };
         resultImg.src = URL.createObjectURL(resultBlob);
 
       } catch (err) {
+        console.error(err);
         statusEl.innerText = "Błąd generowania AI. Spróbuj ponownie.";
         inpaintBtn.disabled = false;
       }
@@ -275,6 +289,11 @@
     scaleSlider.addEventListener('input', (e) => {
       candleState.scale = parseFloat(e.target.value);
       render();
+    });
+
+    thresholdSlider.addEventListener('input', (e) => {
+      candleState.threshold = parseInt(e.target.value, 10);
+      processCandleCut();
     });
 
     function getCoords(clientX, clientY) {
@@ -286,7 +305,7 @@
     }
 
     canvas.addEventListener('touchstart', (e) => {
-      if (!candleCutImg) return;
+      if (!candleCutCanvas) return;
       const pos = getCoords(e.touches[0].clientX, e.touches[0].clientY);
       candleState.isDragging = true;
       candleState.x = pos.x;
@@ -306,7 +325,7 @@
     canvas.addEventListener('touchend', () => { candleState.isDragging = false; });
 
     canvas.addEventListener('mousedown', (e) => {
-      if (!candleCutImg) return;
+      if (!candleCutCanvas) return;
       const pos = getCoords(e.clientX, e.clientY);
       candleState.isDragging = true;
       candleState.x = pos.x;
