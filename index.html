@@ -124,14 +124,21 @@
       background: linear-gradient(180deg, rgba(245, 194, 107, 0.14), rgba(245, 194, 107, 0.05));
       border-color: rgba(245, 194, 107, 0.4);
     }
+
+    /* Przycisk doradcy dopasowany do stylistyki zniczy */
     .btn-advisor {
-      background: linear-gradient(180deg, rgba(147, 51, 234, 0.28), rgba(126, 34, 206, 0.14));
-      border-color: rgba(192, 132, 252, 0.45);
-      color: #f3e8ff;
+      background: linear-gradient(180deg, rgba(245, 194, 107, 0.18), rgba(217, 143, 43, 0.08));
+      border: 1px solid rgba(245, 194, 107, 0.38);
+      color: #fbe9c4;
       margin-top: 10px;
       padding: 13px;
       font-size: 0.93rem;
+      box-shadow: 0 0 16px rgba(217, 143, 43, 0.12);
     }
+    .btn-advisor:hover {
+      background: linear-gradient(180deg, rgba(245, 194, 107, 0.24), rgba(217, 143, 43, 0.14));
+    }
+
     .btn-ai {
       background: linear-gradient(180deg, #f9dc9a, #e0a23a);
       color: #2b1a06;
@@ -161,40 +168,49 @@
     }
     #status.error { color: #ffb4a8; }
 
-    /* Moduł doradcy z analizą koloru */
+    /* Moduł doradcy – stylistyka bursztynowo-złota */
     .advisor-box {
       margin-top: 12px;
       padding: 16px;
-      background: rgba(13, 19, 33, 0.95);
-      border: 1px solid rgba(192, 132, 252, 0.45);
+      background: rgba(14, 20, 36, 0.96);
+      border: 1px solid rgba(245, 194, 107, 0.32);
       border-radius: 14px;
       font-size: 0.94rem;
       line-height: 1.65;
-      color: #f1f5f9;
-      box-shadow: inset 0 0 24px rgba(147, 51, 234, 0.18);
+      color: #f5efe3;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), inset 0 0 22px rgba(217, 143, 43, 0.08);
+      transition: all 0.25s ease;
     }
     .advisor-header {
       font-family: Georgia, serif;
-      color: #f5d0fe;
+      color: #fbe9c4;
       font-size: 1.05rem;
       margin-bottom: 8px;
       font-weight: 600;
+      letter-spacing: 0.02em;
+      border-bottom: 1px solid rgba(245, 194, 107, 0.2);
+      padding-bottom: 6px;
     }
     .advisor-meta {
       display: inline-block;
-      font-size: 0.8rem;
-      padding: 3px 8px;
+      font-size: 0.82rem;
+      padding: 4px 10px;
       border-radius: 6px;
-      background: rgba(245, 194, 107, 0.15);
+      background: rgba(245, 194, 107, 0.12);
       color: var(--amber);
-      margin-bottom: 10px;
-      border: 1px solid rgba(245, 194, 107, 0.3);
+      margin: 6px 0 12px;
+      border: 1px solid rgba(245, 194, 107, 0.25);
     }
     .rec-item {
-      margin-bottom: 8px;
+      margin-bottom: 10px;
+    }
+    .rec-item:last-child {
+      margin-bottom: 0;
     }
     .rec-item strong {
-      color: #fde047;
+      color: #fbe9c4;
+      display: block;
+      margin-bottom: 2px;
     }
 
     #canvas-container {
@@ -370,9 +386,9 @@
     <input type="file" id="input-grave-camera" accept="image/*" capture="environment">
     <input type="file" id="input-grave" accept="image/*">
 
-    <!-- Inteligentny doradca bez limitów API -->
+    <!-- Przycisk inteligentnego doradcy ze zwijaniem -->
     <button class="btn btn-advisor" id="advisor-btn" style="display: none;">
-      💡 Doradź, jakie znicze pasują (Inteligentny Doradca)
+      💡 Doradź, jakie znicze pasują
     </button>
     <div class="advisor-box" id="advisor-box" style="display: none;"></div>
   </div>
@@ -473,6 +489,7 @@
     let selected = -1;
     let resultCanvas = null;
     let drag = { active: false, dx: 0, dy: 0 };
+    let advisorGenerated = false;
 
     function setStatus(msg, isError = false) {
       statusEl.innerText = msg;
@@ -537,8 +554,12 @@
 
         stepCandle.style.display = 'block';
         advisorBtn.style.display = 'block';
+        advisorBtn.innerText = "💡 Doradź, jakie znicze pasują";
         advisorBox.style.display = 'none';
-        setStatus("Świetnie! Kliknij „Doradź”, aby poznać idealną kompozycję lub dodaj znicz.");
+        advisorBox.innerHTML = '';
+        advisorGenerated = false;
+
+        setStatus("Świetnie! Możesz sprawdzić rekomendację lub dodać znicz.");
       } catch (err) {
         setStatus("Nie udało się wczytać zdjęcia. Spróbuj wybrać inne.", true);
       }
@@ -547,14 +568,26 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-    // ---------- LOKALNY INTELIGENTNY DORADCA (BEZ ZEWNĘTRZNYCH LIMITÓW) ----------
+    // ---------- INTELIGENTNY DORADCA ZE ZWIJANIEM / ROZWIJANIEM ----------
     advisorBtn.addEventListener('click', () => {
       if (!graveCanvas) return;
 
-      advisorBox.style.display = 'block';
-      advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję barwę i fakturę granitu...';
+      // 1. Jeśli okno jest już otwarte – zwijamy (minimalizujemy)
+      if (advisorBox.style.display === 'block') {
+        advisorBox.style.display = 'none';
+        advisorBtn.innerText = "💡 Pokaż rekomendację zniczy";
+        return;
+      }
 
-      // Próbkowanie dolnej płyty nagrobka (dolne 40% obrazu)
+      // 2. Jeśli było wcześniej wygenerowane i tylko zwinięte – rozwijamy bez powtórnej analizy
+      if (advisorGenerated) {
+        advisorBox.style.display = 'block';
+        advisorBtn.innerText = "🔼 Zwiń rekomendację zniczy";
+        advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
+      // 3. Pierwsze kliknięcie – badanie parametrów płyty
       const sampleW = 60;
       const sampleH = 40;
       const sc = document.createElement('canvas');
@@ -586,7 +619,6 @@
       let colorRec = "";
       let arrangeRec = "";
 
-      // Klasyfikacja kamienia na podstawie koloru i jasności
       if (brightness < 75) {
         stoneType = "Ciemny, polerowany granit (np. Szwedzki czarny, Impala, Shanxi)";
         styleRec = "Nowoczesne lampiony geometryczne ze szkła fasetowanego lub klasyczne proste kapliczki z dużymi szybami.";
@@ -616,6 +648,10 @@
         <div class="rec-item"><strong>2. Rekomendowana kolorystyka:</strong> ${colorRec}</div>
         <div class="rec-item"><strong>3. Układ na nagrobku:</strong> ${arrangeRec}</div>
       `;
+
+      advisorBox.style.display = 'block';
+      advisorGenerated = true;
+      advisorBtn.innerText = "🔼 Zwiń rekomendację zniczy";
       advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
 
