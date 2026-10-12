@@ -164,7 +164,7 @@
     }
     #status.error { color: #ffb4a8; }
 
-    /* Moduł doradcy AI - pełna wysokość, bez ucinania treści */
+    /* Moduł doradcy AI */
     .advisor-box {
       margin-top: 12px;
       padding: 16px;
@@ -188,7 +188,7 @@
       font-weight: 600;
     }
 
-    /* Zdjęcie nagrobka i obszar roboczy */
+    /* Obszar roboczy wizualizacji */
     #canvas-container {
       --ar: 0.75;
       width: min(100%, 440px, max(200px, calc(var(--ar) * (100vh - var(--bar-h) - 120px))));
@@ -427,7 +427,7 @@
   <script>
     // ---------- KONFIGURACJA GEMINI AI ----------
     const GEMINI_API_KEY = "AIzaSyBWkjBtSpWLPMzp-JuIbW2XyTbHVb_qbh8";
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
     const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
@@ -544,29 +544,29 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-// ---------- REKOMENDACJE GEMINI AI (Z OCHRONĄ PRZED LIMITAMI QUOTA) ----------
+    // ---------- REKOMENDACJE GEMINI 3.8 FLASH ----------
     advisorBtn.addEventListener('click', async () => {
       if (!graveCanvas) return;
 
       advisorBtn.disabled = true;
-      advisorBtn.innerText = "⏳ Analizuję pomnik przez AI...";
+      advisorBtn.innerText = "⏳ Analizuję pomnik przez Gemini AI...";
       advisorBox.style.display = 'block';
       advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję nagrobek...';
 
       try {
         const thumb = document.createElement('canvas');
-        const k = 500 / Math.max(graveCanvas.width, graveCanvas.height);
+        const k = 600 / Math.max(graveCanvas.width, graveCanvas.height);
         thumb.width = Math.round(graveCanvas.width * k);
         thumb.height = Math.round(graveCanvas.height * k);
         thumb.getContext('2d').drawImage(graveCanvas, 0, 0, thumb.width, thumb.height);
-        const base64Data = thumb.toDataURL('image/jpeg', 0.75).split(',')[1];
+        const base64Data = thumb.toDataURL('image/jpeg', 0.8).split(',')[1];
 
         const promptText = 
-          "Działasz jako doradca i florysta funeralny. Przeanalizuj zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych, czytelnych punktach doradź:\n" +
-          "1. Jaki styl zniczy najlepiej pasuje (np. nowoczesne geometryczne, klasyczne kapliczki, mrożone szkło)?\n" +
-          "2. Jaka kolorystyka szkła i okuć będzie najbardziej harmonijna (np. złoto, czerń, miedź, srebro)?\n" +
+          "Działasz jako kulturalny doradca i florysta funeralny. Przeanalizuj przesłane zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych, czytelnych punktach doradź:\n" +
+          "1. Jaki styl zniczy najlepiej pasuje (np. nowoczesne lampiony geometryczne, klasyczne kapliczki, mrożone szkło, witrażowe)?\n" +
+          "2. Jaka kolorystyka szkła i okuć będzie najbardziej harmonijna (np. złoto, czerń, miedź, grafit, srebro)?\n" +
           "3. Jak najlepiej je rozmieścić (proporcje, pojedynczy znicz czy symetryczny układ po bokach)?\n" +
-          "Napisz zwięźle, taktownie i w czytelnych punktach.";
+          "Napisz konkretnie, elegancko i w czytelnych punktach.";
 
         const payload = {
           contents: [{
@@ -574,18 +574,14 @@
               { text: promptText },
               { inlineData: { mimeType: "image/jpeg", data: base64Data } }
             ]
-          }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 800
-          }
+          }]
         };
 
-        // Lista modeli z darmowymi, osobnymi limitami
+        // Najnowsze aktywne modele Gemini
         const candidateModels = [
-          "gemini-2.0-flash-lite",
-          "gemini-1.5-flash-8b",
-          "gemini-2.0-flash"
+          "gemini-3.8-flash",
+          "gemini-3.5-flash-lite",
+          "gemini-2.5-flash"
         ];
 
         let finalData = null;
@@ -603,7 +599,7 @@
             const data = await res.json();
             if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
               finalData = data;
-              break; // Sukces, przerywamy pętlę
+              break;
             } else {
               lastError = data?.error?.message || `Błąd HTTP ${res.status}`;
             }
@@ -613,16 +609,16 @@
         }
 
         if (!finalData) {
-          throw new Error(lastError || "Wyczerpano limity wszystkich modeli.");
+          throw new Error(lastError || "Brak dostępnego modelu.");
         }
 
         const recommendation = finalData.candidates[0].content.parts[0].text;
-        advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja  AI:</div>\n` + recommendation;
+        advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja Gemini AI:</div>\n` + recommendation;
         advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
       } catch (err) {
-        console.error("Błąd limitu:", err);
-        advisorBox.innerText = "Chwilowy limit zapytań: " + err.message + "\nOdczekaj ok. 30–60 sekund i spróbuj ponownie.";
+        console.error("Szczegóły błędu Gemini:", err);
+        advisorBox.innerText = "Błąd API Gemini: " + err.message;
       } finally {
         advisorBtn.disabled = false;
         advisorBtn.innerText = "💡 Wygeneruj rekomendację ponownie";
@@ -918,7 +914,7 @@
       if (!candles.length) return;
       const order = drawOrder();
 
-      // Odbicia
+      // Odbicia w kamieniu
       for (const cd of order) {
         if (cd.reflect <= 0) continue;
         const { w, h, x0, y0 } = candleRect(cd);
