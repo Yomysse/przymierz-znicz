@@ -177,7 +177,9 @@
       btnCandleLabel.style.pointerEvents = 'none';
 
       try {
-        const blob = await imglyRemoveBackground(file);
+        const blob = await imglyRemoveBackground(file, {
+  publicPath: "https://staticimgly.com/@imgly/background-removal-data@1.4.5/dist/"
+});
         const cutUrl = URL.createObjectURL(blob);
 
         candleCutImg = new Image();
