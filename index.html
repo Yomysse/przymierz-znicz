@@ -127,6 +127,14 @@
       background: linear-gradient(180deg, rgba(245, 194, 107, 0.14), rgba(245, 194, 107, 0.05));
       border-color: rgba(245, 194, 107, 0.4);
     }
+    .btn-advisor {
+      background: linear-gradient(180deg, rgba(147, 51, 234, 0.25), rgba(126, 34, 206, 0.12));
+      border-color: rgba(192, 132, 252, 0.4);
+      color: #f3e8ff;
+      margin-top: 10px;
+      padding: 12px;
+      font-size: 0.92rem;
+    }
     .btn-ai {
       background: linear-gradient(180deg, #f9dc9a, #e0a23a);
       color: #2b1a06;
@@ -155,6 +163,29 @@
       line-height: 1.45;
     }
     #status.error { color: #ffb4a8; }
+
+    /* Moduł doradcy AI */
+    .advisor-box {
+      margin-top: 12px;
+      padding: 14px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(192, 132, 252, 0.35);
+      border-radius: 14px;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      color: #e2e8f0;
+      white-space: pre-line;
+      box-shadow: inset 0 0 20px rgba(147, 51, 234, 0.15);
+    }
+    .advisor-header {
+      font-family: Georgia, serif;
+      color: #f5d0fe;
+      font-size: 1rem;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
     /* Zdjęcie */
     #canvas-container {
@@ -275,11 +306,9 @@
     @media (prefers-reduced-motion: reduce) {
       .flame, .flame-wrap::before, .spinner { animation: none; }
     }
-
   </style>
 </head>
 <body>
-
 
   <div class="hero">
     <div class="flame-wrap" aria-hidden="true">
@@ -296,16 +325,13 @@
           </linearGradient>
         </defs>
 
-        <!-- ziemia -->
         <line x1="14" y1="146" x2="206" y2="146" stroke="#f5c26b" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round"/>
 
-        <!-- krzyż -->
         <g class="hero-cross">
           <rect x="102" y="6" width="16" height="140" rx="2" fill="url(#cg)"/>
           <rect x="72" y="36" width="76" height="16" rx="2" fill="url(#cg)"/>
         </g>
 
-        <!-- znicze po bokach -->
         <g>
           <rect x="31" y="112" width="18" height="34" rx="3" fill="#efe3c6"/>
           <rect x="39" y="107" width="2" height="7" fill="#3b2f20"/>
@@ -335,6 +361,12 @@
     </div>
     <input type="file" id="input-grave-camera" accept="image/*" capture="environment">
     <input type="file" id="input-grave" accept="image/*">
+
+    <!-- Przycisk doradcy Gemini AI -->
+    <button class="btn btn-advisor" id="advisor-btn" style="display: none;">
+      💡 Doradź, jakie znicze pasują (Gemini AI)
+    </button>
+    <div class="advisor-box" id="advisor-box" style="display: none;"></div>
   </div>
 
   <div class="card" id="step-candle" style="display: none;">
@@ -357,7 +389,6 @@
     </div>
   </div>
 
-  <!-- Stały panel na dole -->
   <div id="bar">
     <div class="bar-inner">
       <div class="chips" id="row-chips"></div>
@@ -381,7 +412,6 @@
     </div>
   </div>
 
-  <!-- Wybór sposobu dodania kolejnego znicza -->
   <div class="modal" id="add-modal">
     <div class="modal-box">
       <div class="card-title">Dodaj kolejny znicz</div>
@@ -394,6 +424,10 @@
   </div>
 
   <script>
+    // ---------- KONFIGURACJA GEMINI AI ----------
+    const GEMINI_API_KEY = "AIzaSyBWkjBtSpWLPMzp-JuIbW2XyTbHVb_qbh8";
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
     const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
     const MAX_GRAVE = 1600;
@@ -414,6 +448,9 @@
     const inputCandleCamera = document.getElementById('input-candle-camera');
     const stepCandle = document.getElementById('step-candle');
 
+    const advisorBtn = document.getElementById('advisor-btn');
+    const advisorBox = document.getElementById('advisor-box');
+
     const bar = document.getElementById('bar');
     const rowChips = document.getElementById('row-chips');
     const rowSize = document.getElementById('row-size');
@@ -429,12 +466,11 @@
     const addModal = document.getElementById('add-modal');
 
     let graveCanvas = null;
-    let candles = [];       // {cut, base, scale, x, y, reflect, thumb}
+    let candles = [];
     let selected = -1;
     let resultCanvas = null;
     let drag = { active: false, dx: 0, dy: 0 };
 
-    // ---------- Pomocnicze UI ----------
     function setStatus(msg, isError = false) {
       statusEl.innerText = msg;
       statusEl.classList.toggle('error', isError);
@@ -497,7 +533,9 @@
         render();
 
         stepCandle.style.display = 'block';
-        setStatus("Świetnie! Teraz dodaj zdjęcie wybranego znicza.");
+        advisorBtn.style.display = 'block';
+        advisorBox.style.display = 'none';
+        setStatus("Świetnie! Możesz zapytać doradcę AI o rekomendację lub dodać znicz.");
       } catch (err) {
         setStatus("Nie udało się wczytać zdjęcia. Spróbuj wybrać inne.", true);
       }
@@ -505,6 +543,74 @@
     }
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
+
+    // ---------- REKOMENDACJE GEMINI AI ----------
+    advisorBtn.addEventListener('click', async () => {
+      if (!graveCanvas) return;
+
+      if (!GEMINI_API_KEY || GEMINI_API_KEY.includes("TUTAJ_")) {
+        alert("Wklej swój klucz Gemini API w skrypcie (zmienna GEMINI_API_KEY)!");
+        return;
+      }
+
+      advisorBtn.disabled = true;
+      advisorBtn.innerText = "⏳ Analizuję pomnik przez Gemini AI...";
+      advisorBox.style.display = 'block';
+      advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję kolor kamienia, styl nagrobka i oświetlenie...';
+
+      try {
+        // Skalujemy miniaturę do analizy multimodalnej (szybki przesył)
+        const thumb = document.createElement('canvas');
+        const k = 600 / Math.max(graveCanvas.width, graveCanvas.height);
+        thumb.width = Math.round(graveCanvas.width * k);
+        thumb.height = Math.round(graveCanvas.height * k);
+        thumb.getContext('2d').drawImage(graveCanvas, 0, 0, thumb.width, thumb.height);
+        const base64Data = thumb.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+        const promptText = 
+          "Działasz jako kulturalny doradca i florysta funeralny. Przeanalizuj przesłane zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych punktach doradź:\n" +
+          "1. Jaki styl zniczy najlepiej pasuje (np. nowoczesne lampiony geometryczne, klasyczne szkło mrożone, witrażowe, kapliczki)?\n" +
+          "2. Jaka kolorystyka szkła i okuć będzie najbardziej harmonijna (np. złoto, czerń, miedź, srebro)?\n" +
+          "3. Jak najlepiej je rozmieścić (proporcje, pojedynczy znicz czy symetryczny układ po bokach)?\n" +
+          "Napisz krótko, taktownie i konkretnie.";
+
+        const payload = {
+          contents: [{
+            parts: [
+              { text: promptText },
+              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 600
+          }
+        };
+
+        const res = await fetch(GEMINI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error(`Błąd API Gemini: ${res.status}`);
+
+        const data = await res.json();
+        const recommendation = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (recommendation) {
+          advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja Gemini AI:</div>` + recommendation;
+        } else {
+          advisorBox.innerText = "Nie udało się wygenerować rekomendacji.";
+        }
+      } catch (err) {
+        console.error(err);
+        advisorBox.innerText = "Wystąpił błąd podczas analizy. Spróbuj ponownie za chwilę.";
+      } finally {
+        advisorBtn.disabled = false;
+        advisorBtn.innerText = "💡 Wygeneruj rekomendację ponownie";
+      }
+    });
 
     // ---------- 2. Znicz: wycinanie tła ----------
     let removeBackgroundFn = null;
@@ -544,7 +650,6 @@
       return out;
     }
 
-    // Delikatne dopasowanie balansu bieli znicza do zdjęcia nagrobka
     function harmonizeCandle(c) {
       const sc = document.createElement('canvas');
       sc.width = sc.height = 32;
@@ -645,12 +750,12 @@
         selectCandle(candles.length - 1);
         showEditMode();
         clearBusy();
-        setStatus("Dotknij znicza i przesuń go palcem. Zdjęcie możesz przewijać, dotykając poza zniczem.");
+        setStatus("Dotknij znicza i przesuń go palcem na płycie.");
         focusStage();
       } catch (err) {
         console.error(err);
         clearBusy();
-        setStatus("Nie udało się wyciąć znicza. Spróbuj zrobić zdjęcie przy lepszym świetle, z całym zniczem w kadrze.", true);
+        setStatus("Nie udało się wyciąć znicza. Spróbuj zrobić zdjęcie przy lepszym świetle.", true);
       }
       e.target.value = '';
     }
@@ -723,14 +828,12 @@
       selectCandle(Math.min(selected, candles.length - 1));
     });
 
-    // ---------- Automatyczny dobór ustawień ----------
     function candleRect(c) {
       const w = c.cut.width * c.scale;
       const h = c.cut.height * c.scale;
       return { w, h, x0: c.x - w / 2, y0: c.y - h / 2 };
     }
 
-    // Ciemna i gładka płyta = mocne odbicie; jasna lub chropowata = słabe
     function surfaceInfo(c) {
       const { w, h, x0, y0 } = candleRect(c);
       const sx = Math.max(0, Math.round(x0));
@@ -782,9 +885,7 @@
       };
     }
 
-    // ---------- Rysowanie (realistyczne wklejenie bez AI) ----------
     function drawOrder() {
-      // niżej na zdjęciu = bliżej obserwatora = rysowane później (na wierzchu)
       return [...candles].sort((a, b) => (a.y + candleRect(a).h / 2) - (b.y + candleRect(b).h / 2));
     }
 
@@ -837,7 +938,7 @@
         c.restore();
       }
 
-      // Znicze z miękkim cieniem
+      // Znicze z cieniem
       for (const cd of order) {
         const { w, h, x0, y0 } = candleRect(cd);
         c.save();
@@ -874,7 +975,7 @@
       }
     }
 
-    // ---------- 3. AI ----------
+    // ---------- 3. AI Inpainting ----------
     function silhouetteOf(cd, color) {
       const { w, h } = candleRect(cd);
       const sil = document.createElement('canvas');
@@ -897,7 +998,6 @@
       }
     }
 
-    // Maska etapu 1: cień i odbicie pod zniczami (znicze zostają czarne = nietknięte)
     function buildMask() {
       const m = document.createElement('canvas');
       m.width = canvas.width;
@@ -919,7 +1019,6 @@
       return m;
     }
 
-    // Maska etapu 2: sylwetki zniczy (lekko poszerzone)
     function buildCandleMask() {
       const m = document.createElement('canvas');
       m.width = canvas.width;
@@ -970,8 +1069,6 @@
       return { img, maskSmall, aiCanvas };
     }
 
-    // Średnia różnica (0-255) między wejściem a wynikiem AI w obszarze maski.
-    // Duża różnica = ryzyko halucynacji.
     function maskDiff(aiCanvas, resultImg, maskSmall, W, H) {
       const t = document.createElement('canvas');
       t.width = W;
@@ -1025,7 +1122,6 @@
         const H = Math.max(256, Math.round(ch * k / 8) * 8);
         const auto = autoSettings();
 
-        // Etap 1: cień i odbicie pod zniczami
         setBusy("Tworzę realistyczną wizualizację…\nDopasowuję cień i odbicie (ok. 30 s)");
         const r1 = await callAI(
           canvas, buildMask(), W, H,
@@ -1047,7 +1143,6 @@
 
         let final = stage1;
 
-        // Etap 2: wtopienie zniczy w światło sceny z kontrolą halucynacji
         setBusy("Tworzę realistyczną wizualizację…\n" + (many ? "Wtapiam znicze w scenę" : "Wtapiam znicz w scenę"));
         const r2 = await callAI(
           stage1, buildCandleMask(), W, H,
@@ -1097,7 +1192,6 @@
       render();
     });
 
-    // ---------- Przesuwanie: tylko po dotknięciu znicza, reszta zdjęcia się przewija ----------
     function getCoords(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
       const f = canvas.width / rect.width;
@@ -1105,10 +1199,10 @@
     }
 
     function hitTest(pos) {
-      const pad = 24 * pos.f; // zapas na palec
+      const pad = 24 * pos.f;
       const order = candles
         .map((c, i) => ({ c, i, bottom: c.y + candleRect(c).h / 2 }))
-        .sort((a, b) => b.bottom - a.bottom); // wierzchni pierwszy
+        .sort((a, b) => b.bottom - a.bottom);
       for (const { c, i } of order) {
         const { w, h, x0, y0 } = candleRect(c);
         if (pos.x >= x0 - pad && pos.x <= x0 + w + pad && pos.y >= y0 - pad && pos.y <= y0 + h + pad) return i;
@@ -1145,7 +1239,7 @@
     canvas.addEventListener('touchstart', (e) => {
       if (!canDrag()) return;
       const pos = getCoords(e.touches[0].clientX, e.touches[0].clientY);
-      if (startDrag(pos)) e.preventDefault(); // blokuje przewijanie tylko gdy dotknięto znicza
+      if (startDrag(pos)) e.preventDefault();
     }, { passive: false });
 
     canvas.addEventListener('touchmove', (e) => {
@@ -1166,7 +1260,6 @@
     });
     window.addEventListener('mouseup', endDrag);
 
-    // ---------- Zapis (bez ramki zaznaczenia) ----------
     function save() {
       let src = resultCanvas;
       if (!src) {
