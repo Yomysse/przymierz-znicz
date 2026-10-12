@@ -427,7 +427,7 @@
   <script>
     // ---------- KONFIGURACJA GEMINI AI ----------
     const GEMINI_API_KEY = "AIzaSyBWkjBtSpWLPMzp-JuIbW2XyTbHVb_qbh8";
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
     const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
     const BGREMOVAL_URL = "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm";
@@ -545,12 +545,12 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-    // ---------- REKOMENDACJE GEMINI AI ----------
+   // ---------- REKOMENDACJE GEMINI AI ----------
     advisorBtn.addEventListener('click', async () => {
       if (!graveCanvas) return;
 
       advisorBtn.disabled = true;
-      advisorBtn.innerText = "⏳ Analizuję pomnik przez Gemini AI...";
+      advisorBtn.innerText = "⏳ Analizuję pomnik za pomocą AI...";
       advisorBox.style.display = 'block';
       advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję kolor kamienia, styl nagrobka i oświetlenie...';
 
@@ -588,20 +588,24 @@
           body: JSON.stringify(payload)
         });
 
-        if (!res.ok) throw new Error(`Błąd API Gemini: ${res.status}`);
-
         const data = await res.json();
+
+        if (!res.ok) {
+          const errMsg = data?.error?.message || `Błąd HTTP ${res.status}`;
+          throw new Error(errMsg);
+        }
+
         const recommendation = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (recommendation) {
-          advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja Gemini AI:</div>\n` + recommendation;
+          advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja AI:</div>\n` + recommendation;
           advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
-          advisorBox.innerText = "Nie udało się wygenerować rekomendacji.";
+          advisorBox.innerText = "Nie udało się wygenerować rekomendacji. Spróbuj ponownie.";
         }
       } catch (err) {
-        console.error(err);
-        advisorBox.innerText = "Wystąpił błąd podczas analizy. Spróbuj ponownie za chwilę.";
+        console.error("Szczegóły błędu Gemini:", err);
+        advisorBox.innerText = "Błąd API Gemini: " + err.message;
       } finally {
         advisorBtn.disabled = false;
         advisorBtn.innerText = "💡 Wygeneruj rekomendację ponownie";
