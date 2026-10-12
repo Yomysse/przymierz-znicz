@@ -544,7 +544,7 @@
     inputGrave.addEventListener('change', handleGraveFile);
     inputGraveCamera.addEventListener('change', handleGraveFile);
 
-  // ---------- REKOMENDACJE GEMINI AI ----------
+// ---------- REKOMENDACJE GEMINI AI (Z OCHRONĄ PRZED LIMITAMI QUOTA) ----------
     advisorBtn.addEventListener('click', async () => {
       if (!graveCanvas) return;
 
@@ -555,11 +555,11 @@
 
       try {
         const thumb = document.createElement('canvas');
-        const k = 600 / Math.max(graveCanvas.width, graveCanvas.height);
+        const k = 500 / Math.max(graveCanvas.width, graveCanvas.height);
         thumb.width = Math.round(graveCanvas.width * k);
         thumb.height = Math.round(graveCanvas.height * k);
         thumb.getContext('2d').drawImage(graveCanvas, 0, 0, thumb.width, thumb.height);
-        const base64Data = thumb.toDataURL('image/jpeg', 0.8).split(',')[1];
+        const base64Data = thumb.toDataURL('image/jpeg', 0.75).split(',')[1];
 
         const promptText = 
           "Działasz jako doradca i florysta funeralny. Przeanalizuj zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych, czytelnych punktach doradź:\n" +
@@ -576,44 +576,53 @@
             ]
           }],
           generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1024
+            temperature: 0.3,
+            maxOutputTokens: 800
           }
         };
 
-        // Próba z gemini-2.0-flash
-        let res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        // Lista modeli z darmowymi, osobnymi limitami
+        const candidateModels = [
+          "gemini-2.0-flash-lite",
+          "gemini-1.5-flash-8b",
+          "gemini-2.0-flash"
+        ];
 
-        // Jeśli model nie jest dostępny, fallback na gemini-2.5-flash
-        if (!res.ok) {
-          res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+        let finalData = null;
+        let lastError = null;
+
+        for (const modelName of candidateModels) {
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+              finalData = data;
+              break; // Sukces, przerywamy pętlę
+            } else {
+              lastError = data?.error?.message || `Błąd HTTP ${res.status}`;
+            }
+          } catch (e) {
+            lastError = e.message;
+          }
         }
 
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data?.error?.message || `Status HTTP ${res.status}`);
+        if (!finalData) {
+          throw new Error(lastError || "Wyczerpano limity wszystkich modeli.");
         }
 
-        const recommendation = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const recommendation = finalData.candidates[0].content.parts[0].text;
+        advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja  AI:</div>\n` + recommendation;
+        advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-        if (recommendation) {
-          advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja AI:</div>\n` + recommendation;
-          advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-          advisorBox.innerText = "Nie udało się wygenerować rekomendacji.";
-        }
       } catch (err) {
-        console.error("Szczegóły błędu:", err);
-        advisorBox.innerText = "Błąd API Gemini: " + err.message;
+        console.error("Błąd limitu:", err);
+        advisorBox.innerText = "Chwilowy limit zapytań: " + err.message + "\nOdczekaj ok. 30–60 sekund i spróbuj ponownie.";
       } finally {
         advisorBtn.disabled = false;
         advisorBtn.innerText = "💡 Wygeneruj rekomendację ponownie";
