@@ -164,38 +164,26 @@
     }
     #status.error { color: #ffb4a8; }
 
-    /* Moduł doradcy AI z przewijaniem */
+    /* Moduł doradcy AI - naturalna wysokość bez ucinania tekstu */
     .advisor-box {
       margin-top: 12px;
-      padding: 14px 16px;
+      padding: 16px;
       background: rgba(13, 19, 33, 0.94);
       border: 1px solid rgba(192, 132, 252, 0.45);
       border-radius: 14px;
-      font-size: 0.92rem;
-      line-height: 1.6;
-      color: #e2e8f0;
+      font-size: 0.94rem;
+      line-height: 1.65;
+      color: #f1f5f9;
       white-space: pre-line;
       box-shadow: inset 0 0 24px rgba(147, 51, 234, 0.18);
-
-      max-height: 280px;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      touch-action: pan-y;
-      -webkit-overflow-scrolling: touch;
+      word-break: break-word;
       user-select: text;
       -webkit-user-select: text;
-    }
-    .advisor-box::-webkit-scrollbar {
-      width: 6px;
-    }
-    .advisor-box::-webkit-scrollbar-thumb {
-      background: rgba(192, 132, 252, 0.45);
-      border-radius: 3px;
     }
     .advisor-header {
       font-family: Georgia, serif;
       color: #f5d0fe;
-      font-size: 1rem;
+      font-size: 1.05rem;
       margin-bottom: 8px;
       font-weight: 600;
     }
@@ -242,7 +230,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Stały dolny panel edycji */
+    /* Dolny pasek */
     #bar {
       position: fixed;
       left: 0;
@@ -561,18 +549,12 @@
     advisorBtn.addEventListener('click', async () => {
       if (!graveCanvas) return;
 
-      if (!GEMINI_API_KEY || GEMINI_API_KEY.includes("TUTAJ_")) {
-        alert("Wklej swój klucz Gemini API w skrypcie (zmienna GEMINI_API_KEY)!");
-        return;
-      }
-
       advisorBtn.disabled = true;
       advisorBtn.innerText = "⏳ Analizuję pomnik przez Gemini AI...";
       advisorBox.style.display = 'block';
       advisorBox.innerHTML = '<div class="advisor-header">✨ Doradca Kompozycji:</div>Analizuję kolor kamienia, styl nagrobka i oświetlenie...';
 
       try {
-        // Skalowanie do optymalnego rozmiaru do analizy multimodalnej
         const thumb = document.createElement('canvas');
         const k = 600 / Math.max(graveCanvas.width, graveCanvas.height);
         thumb.width = Math.round(graveCanvas.width * k);
@@ -581,11 +563,11 @@
         const base64Data = thumb.toDataURL('image/jpeg', 0.8).split(',')[1];
 
         const promptText = 
-          "Działasz jako kulturalny doradca i florysta funeralny. Przeanalizuj przesłane zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych punktach doradź:\n" +
+          "Działasz jako kulturalny doradca i florysta funeralny. Przeanalizuj przesłane zdjęcie nagrobka (odcień i fakturę granitu, styl pomnika, przestrzeń na płycie) i w zwięzłych, czytelnych punktach doradź:\n" +
           "1. Jaki styl zniczy najlepiej pasuje (np. nowoczesne lampiony geometryczne, klasyczne szkło mrożone, witrażowe, kapliczki)?\n" +
           "2. Jaka kolorystyka szkła i okuć będzie najbardziej harmonijna (np. złoto, czerń, miedź, srebro)?\n" +
           "3. Jak najlepiej je rozmieścić (proporcje, pojedynczy znicz czy symetryczny układ po bokach)?\n" +
-          "Napisz krótko, taktownie i konkretnie.";
+          "Napisz konkretnie, elegancko i wyczerpująco w punktach.";
 
         const payload = {
           contents: [{
@@ -596,7 +578,7 @@
           }],
           generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: 600
+            maxOutputTokens: 2048
           }
         };
 
@@ -612,7 +594,7 @@
         const recommendation = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (recommendation) {
-          advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja Gemini AI:</div>` + recommendation;
+          advisorBox.innerHTML = `<div class="advisor-header">✨ Rekomendacja Gemini AI:</div>\n` + recommendation;
           advisorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
           advisorBox.innerText = "Nie udało się wygenerować rekomendacji.";
