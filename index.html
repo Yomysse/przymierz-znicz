@@ -53,6 +53,8 @@
       margin-bottom: 12px;
       min-height: 22px;
       text-align: center;
+      word-break: break-word;
+      padding: 0 8px;
     }
 
     #canvas-container {
@@ -229,22 +231,20 @@
       }
     }
 
-    // 3. Generowanie podglądu przez Cloudflare Workers AI Inpainting
+    // 3. Generowanie podglądu przez AI
     inpaintBtn.addEventListener('click', async () => {
       if (!candleCutCanvas) return;
 
-      statusEl.innerText = "⏳ AI generuje wizualizację (ok. 10-15 sekund)...";
+      statusEl.innerText = "⏳ Wysyłanie do AI (może potrwać ok. 15-25 s)...";
       inpaintBtn.disabled = true;
 
       try {
-        // Skalowanie do optymalnej rozdzielczości modelu SD (512x512)
         const aiCanvas = document.createElement('canvas');
         aiCanvas.width = 512;
         aiCanvas.height = 512;
         const aiCtx = aiCanvas.getContext('2d');
         aiCtx.drawImage(canvas, 0, 0, 512, 512);
 
-        // Tworzenie maski z marginesem na cienie
         const maskCanvas = document.createElement('canvas');
         maskCanvas.width = 512;
         maskCanvas.height = 512;
@@ -277,9 +277,17 @@
           body: formData
         });
 
+        const contentType = res.headers.get("content-type") || "";
+
+        if (contentType.includes("application/json")) {
+          const json = await res.json();
+          if (json.error) {
+            throw new Error(json.error);
+          }
+        }
+
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `HTTP ${res.status}`);
+          throw new Error(`HTTP ${res.status}`);
         }
 
         const resultBlob = await res.blob();
@@ -321,7 +329,7 @@
       };
     }
 
-    // Obsługa dotyku (telefon)
+    // Obsługa dotyku (smartfony)
     canvas.addEventListener('touchstart', (e) => {
       if (!candleCutCanvas) return;
       const pos = getCoords(e.touches[0].clientX, e.touches[0].clientY);
@@ -362,7 +370,7 @@
 
     window.addEventListener('mouseup', () => { candleState.isDragging = false; });
 
-    // Pobieranie gotowego obrazu
+    // Pobieranie wizualizacji
     downloadBtn.addEventListener('click', () => {
       const link = document.createElement('a');
       link.download = 'nagrobek-wizualizacja.jpg';
