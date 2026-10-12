@@ -47,7 +47,7 @@
     .btn-candle { background: #0284c7; }
     .btn-ai { background: #9333ea; }
     .btn-download { background: #16a34a; }
-    
+
     input[type="file"] { display: none; }
 
     #status {
@@ -71,7 +71,7 @@
       position: relative;
       touch-action: none;
     }
-    canvas { width: 100%; height: 100%; display: block; }
+    canvas { width: 100%; height: 100%; display: block; object-fit: contain; }
 
     .controls {
       width: 100%;
@@ -127,14 +127,18 @@
       <input type="range" id="threshold-slider" min="140" max="250" step="1" value="215">
     </div>
 
-    <button class="btn btn-ai" id="inpaint-btn">✨ Wtop znicz przez Hugging Face AI</button>
+    <div class="slider-row">
+      <label for="strength-slider">Siła AI:</label>
+      <input type="range" id="strength-slider" min="0.3" max="0.9" step="0.05" value="0.6">
+    </div>
+
+    <button class="btn btn-ai" id="inpaint-btn">✨ Wtop znicz przez AI</button>
     <button class="btn btn-download" id="download-btn">💾 Pobierz zdjęcie</button>
   </div>
 
   <script>
-    // Bezpośredni dostęp do Hugging Face Inference API bez pośrednictwa Cloudflare
-    const HF_TOKEN = "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";
-    const HF_MODEL_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
+    // Worker Cloudflare (Workers AI). Żadnego tokena we froncie.
+    const AI_URL = "https://znicz-ai-proxy.maxfunnn.workers.dev";
 
     const statusEl = document.getElementById('status');
     const canvas = document.getElementById('stage');
@@ -149,6 +153,7 @@
 
     const scaleSlider = document.getElementById('scale-slider');
     const thresholdSlider = document.getElementById('threshold-slider');
+    const strengthSlider = document.getElementById('strength-slider');
 
     let graveImg = null;
     let candleRawImg = null;
@@ -240,92 +245,80 @@
       }
     }
 
-    // 3. Generowanie realistycznego inpaintingu bezpośrednio przez Hugging Face API
+    // 3. Inpainting AI przez Cloudflare Workers AI
     inpaintBtn.addEventListener('click', async () => {
       if (!candleCutCanvas) return;
 
-      statusEl.innerText = "⏳ Wysyłanie do Hugging Face AI (może potrwać ok. 15-25 s)...";
+      statusEl.innerText = "⏳ Generowanie wizualizacji AI (ok. 10-30 s)...";
       inpaintBtn.disabled = true;
 
       try {
-        // Skalowanie do optymalnej siatki modelu SD (512x512)
-        const aiCanvas = document.createElement('canvas');
-        aiCanvas.width = 512;
-        aiCanvas.height = 512;
-        const aiCtx = aiCanvas.getContext('2d');
-        aiCtx.drawImage(canvas, 0, 0, 512, 512);
+        // Proporcje zachowane, max 512 px, wymiary podzielne przez 8
+        const scale = 512 / Math.max(canvas.width, canvas.height);
+        const W = Math.max(256, Math.round(canvas.width * scale / 8) * 8);
+        const H = Math.max(256, Math.round(canvas.height * scale / 8) * 8);
 
-        // Maska: czarne tło (pozostaje nienaruszone), biały prostokąt (obszar wtapiania)
+        const aiCanvas = document.createElement('canvas');
+        aiCanvas.width = W;
+        aiCanvas.height = H;
+        aiCanvas.getContext('2d').drawImage(canvas, 0, 0, W, H);
+
+        // Maska: biały = obszar do przemalowania
         const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = 512;
-        maskCanvas.height = 512;
+        maskCanvas.width = W;
+        maskCanvas.height = H;
         const mCtx = maskCanvas.getContext('2d');
         mCtx.fillStyle = '#000000';
-        mCtx.fillRect(0, 0, 512, 512);
+        mCtx.fillRect(0, 0, W, H);
 
-        const ratioX = 512 / canvas.width;
-        const ratioY = 512 / canvas.height;
-
-        const w = candleCutCanvas.width * candleState.scale * ratioX;
-        const h = candleCutCanvas.height * candleState.scale * ratioY;
-        const drawX = (candleState.x * ratioX) - (w / 2);
-        const drawY = (candleState.y * ratioY) - (h / 2);
+        const rx = W / canvas.width;
+        const ry = H / canvas.height;
+        const w = candleCutCanvas.width * candleState.scale * rx;
+        const h = candleCutCanvas.height * candleState.scale * ry;
+        const dx = candleState.x * rx - w / 2;
+        const dy = candleState.y * ry - h / 2;
 
         mCtx.fillStyle = '#ffffff';
-        mCtx.fillRect(drawX - 6, drawY - 6, w + 12, h + 16);
-
-        // Pobranie ciągów Base64 bez nagłówków data:image/png;base64,
-        const imageB64 = aiCanvas.toDataURL('image/png').split(',')[1];
-        const maskB64 = maskCanvas.toDataURL('image/png').split(',')[1];
+        mCtx.fillRect(dx - 8, dy - 8, w + 16, h + 24);
 
         const payload = {
-          inputs: "a realistic glass grave candle lantern sitting on a dark polished granite tombstone slab, outdoor cemetery daylight, natural cast shadow and reflections",
-          parameters: {
-            image: imageB64,
-            mask_image: maskB64
-          }
+          prompt: "a realistic glass grave candle lantern sitting on a dark polished granite tombstone, cemetery, natural daylight, soft cast shadow and reflection on the stone",
+          image: aiCanvas.toDataURL('image/png').split(',')[1],
+          mask: maskCanvas.toDataURL('image/png').split(',')[1],
+          width: W,
+          height: H,
+          strength: parseFloat(strengthSlider.value)
         };
 
-        const res = await fetch(HF_MODEL_URL, {
+        const res = await fetch(AI_URL, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${HF_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
-        // Obsługa ewentualnego cold-startu modelu lub błędu
         const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const json = await res.json();
-          if (json.error) {
-            // Jeśli model się wybudza, Hugging Face zwraca szacowany czas w sekundach
-            if (json.estimated_time) {
-              throw new Error(`Model się wybudza (potrzebuje ok. ${Math.round(json.estimated_time)} s). Spróbuj za chwilę!`);
-            }
-            throw new Error(json.error);
-          }
+          throw new Error(json.error || 'Nieznany błąd workera');
         }
-
-        if (!res.ok) {
-          throw new Error(`Błąd HTTP ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Błąd HTTP ${res.status}`);
 
         const resultBlob = await res.blob();
         const resultImg = new Image();
         resultImg.onload = () => {
           graveImg = resultImg;
+          canvas.width = resultImg.naturalWidth;
+          canvas.height = resultImg.naturalHeight;
           candleCutCanvas = null;
           editControls.style.display = 'none';
           render();
-          statusEl.innerText = "✨ Gotowe! Znicz został wtopiony przez AI. Możesz pobrać zdjęcie.";
+          statusEl.innerText = "✨ Gotowe! Możesz pobrać zdjęcie.";
           inpaintBtn.disabled = false;
         };
         resultImg.src = URL.createObjectURL(resultBlob);
 
       } catch (err) {
-        console.error("Błąd generowania HF:", err);
+        console.error("Błąd AI:", err);
         statusEl.innerText = "Błąd AI: " + err.message;
         inpaintBtn.disabled = false;
       }
@@ -349,7 +342,7 @@
       };
     }
 
-    // Obsługa dotyku (smartfony)
+    // Dotyk (smartfony)
     canvas.addEventListener('touchstart', (e) => {
       if (!candleCutCanvas) return;
       const pos = getCoords(e.touches[0].clientX, e.touches[0].clientY);
@@ -370,7 +363,7 @@
 
     canvas.addEventListener('touchend', () => { candleState.isDragging = false; });
 
-    // Obsługa myszy (komputer)
+    // Mysz (komputer)
     canvas.addEventListener('mousedown', (e) => {
       if (!candleCutCanvas) return;
       const pos = getCoords(e.clientX, e.clientY);
