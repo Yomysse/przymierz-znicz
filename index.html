@@ -3,167 +3,246 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Wizualizator Znicza</title>
+  <title>Wizualizator Zniczy</title>
+  <meta name="theme-color" content="#090d18">
 
   <style>
-    :root { --bar-h: 0px; }
+    :root {
+      --bar-h: 0px;
+      --amber: #f5c26b;
+      --amber-deep: #d98f2b;
+      --line: rgba(245, 194, 107, 0.22);
+      --card: rgba(20, 26, 43, 0.82);
+      --text: #f5efe3;
+      --muted: #b4ab96;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 50% 108%, rgba(217, 143, 43, 0.28), transparent 55%),
+        radial-gradient(ellipse at 50% -8%, rgba(86, 98, 150, 0.28), transparent 52%),
+        #090d18;
+      background-attachment: fixed;
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      padding: 20px 16px 32px;
-    }
-    h1 { font-size: 1.5rem; font-weight: 700; text-align: center; }
-    .subtitle {
-      font-size: 0.95rem;
-      color: #94a3b8;
-      text-align: center;
-      margin: 6px 0 18px;
-      max-width: 440px;
-      line-height: 1.4;
+      padding: 22px 16px 32px;
     }
 
+    /* Nagłówek */
+    .hero { text-align: center; margin-bottom: 6px; }
+    .flame-wrap { width: 220px; height: 160px; margin: 0 auto 6px; position: relative; }
+    .flame-wrap::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -10px;
+      width: 280px;
+      height: 150px;
+      transform: translateX(-50%);
+      background: radial-gradient(ellipse at 50% 70%, rgba(245, 194, 107, 0.34), transparent 66%);
+      animation: glow 3.2s ease-in-out infinite;
+    }
+    .flame-wrap svg { position: relative; width: 100%; height: 100%; overflow: visible; }
+    .hero-cross { filter: drop-shadow(0 0 8px rgba(245, 194, 107, 0.35)); }
+    .flame { transform-box: fill-box; transform-origin: 50% 90%; animation: flicker 2.6s ease-in-out infinite; }
+    .flame.b { animation-delay: -1.3s; }
+    @keyframes flicker {
+      0%, 100% { transform: scale(1, 1) rotate(0deg); }
+      18% { transform: scale(0.96, 1.05) rotate(-1.5deg); }
+      37% { transform: scale(1.03, 0.97) rotate(1.2deg); }
+      61% { transform: scale(0.98, 1.04) rotate(-0.8deg); }
+      82% { transform: scale(1.02, 0.99) rotate(1deg); }
+    }
+    @keyframes glow {
+      0%, 100% { opacity: 0.85; transform: translateX(-50%) scale(1); }
+      50% { opacity: 1; transform: translateX(-50%) scale(1.08); }
+    }
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.75rem;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      color: #fbe9c4;
+      text-shadow: 0 0 18px rgba(245, 194, 107, 0.35);
+    }
+    .ornament { color: var(--amber); opacity: 0.7; letter-spacing: 0.5em; font-size: 0.7rem; margin: 8px 0 10px; }
+    .subtitle {
+      font-family: Georgia, "Times New Roman", serif;
+      font-style: italic;
+      font-size: 1rem;
+      color: var(--muted);
+      text-align: center;
+      margin: 0 auto 18px;
+      max-width: 400px;
+      line-height: 1.5;
+    }
+
+    /* Karty kroków */
     .card {
       width: 100%;
       max-width: 440px;
-      background: #1e293b;
-      border-radius: 14px;
-      padding: 14px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 12px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    }
+    .card-title {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.1rem;
+      color: #fbe9c4;
       margin-bottom: 12px;
     }
-    .card-title { font-size: 1rem; font-weight: 700; margin-bottom: 10px; }
     .btn-row { display: flex; gap: 10px; }
 
+    /* Przyciski */
     .btn {
       width: 100%;
-      background: #4f46e5;
-      color: white;
-      border: none;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--line);
       padding: 16px 12px;
-      border-radius: 12px;
+      border-radius: 14px;
       font-size: 1rem;
       font-weight: 600;
       text-align: center;
       cursor: pointer;
       user-select: none;
-      transition: background 0.2s;
+      transition: transform 0.12s, background 0.2s, box-shadow 0.2s;
       display: block;
     }
     .btn-row .btn { flex: 1; }
     .btn-row .btn.wide { flex: 2; }
-    .btn:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
-    .btn:active:not(:disabled) { transform: scale(0.98); }
-    .btn-grave { background: #7c3aed; }
-    .btn-candle { background: #0284c7; }
-    .btn-ai { background: #9333ea; }
-    .btn-download { background: #16a34a; }
-    .btn-undo { background: #475569; }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-grave, .btn-candle {
+      background: linear-gradient(180deg, rgba(245, 194, 107, 0.14), rgba(245, 194, 107, 0.05));
+      border-color: rgba(245, 194, 107, 0.4);
+    }
+    .btn-ai {
+      background: linear-gradient(180deg, #f9dc9a, #e0a23a);
+      color: #2b1a06;
+      border: none;
+      font-weight: 700;
+      box-shadow: 0 0 22px rgba(245, 194, 107, 0.4);
+    }
+    .btn-download {
+      background: linear-gradient(180deg, #3d8564, #2c6a4d);
+      border: none;
+      color: #f2fff8;
+    }
+    .btn-undo { background: rgba(255, 255, 255, 0.05); color: var(--muted); }
 
     input[type="file"] { display: none; }
 
     #status {
-      font-size: 0.95rem;
-      color: #cbd5e1;
+      font-size: 0.98rem;
+      color: #ddd3bb;
       margin-bottom: 10px;
       min-height: 22px;
       text-align: center;
       word-break: break-word;
       padding: 0 8px;
       max-width: 440px;
-      line-height: 1.4;
+      line-height: 1.45;
     }
-    #status.error { color: #fca5a5; }
+    #status.error { color: #ffb4a8; }
 
+    /* Zdjęcie */
     #canvas-container {
       --ar: 0.75;
       width: min(100%, 440px, max(200px, calc(var(--ar) * (100vh - var(--bar-h) - 120px))));
       aspect-ratio: 3 / 4;
-      background: #1e293b;
-      border: 2px dashed #334155;
-      border-radius: 14px;
+      background: rgba(20, 26, 43, 0.6);
+      border: 1px solid var(--line);
+      border-radius: 18px;
       overflow: hidden;
       position: relative;
+      box-shadow: 0 0 44px rgba(217, 143, 43, 0.14), 0 10px 30px rgba(0, 0, 0, 0.5);
     }
     canvas { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
 
     .busy {
       position: absolute;
       inset: 0;
-      background: rgba(15, 23, 42, 0.78);
+      background: rgba(9, 13, 24, 0.82);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 14px;
+      gap: 16px;
       text-align: center;
       padding: 20px;
-      font-size: 1rem;
-      line-height: 1.4;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.05rem;
+      line-height: 1.5;
+      color: #fbe9c4;
     }
     #busy-text { white-space: pre-line; }
     .spinner {
-      width: 44px;
-      height: 44px;
-      border: 5px solid #475569;
-      border-top-color: #a78bfa;
+      width: 46px;
+      height: 46px;
+      border: 4px solid rgba(245, 194, 107, 0.2);
+      border-top-color: var(--amber);
       border-radius: 50%;
-      animation: spin 0.9s linear infinite;
+      animation: spin 1s linear infinite;
+      box-shadow: 0 0 18px rgba(245, 194, 107, 0.3);
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Stały panel na dole ekranu */
+    /* Stały panel na dole */
     #bar {
       position: fixed;
       left: 0;
       right: 0;
       bottom: 0;
-      background: #0b1220;
-      border-top: 1px solid #334155;
+      background: rgba(9, 13, 24, 0.94);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-top: 1px solid var(--line);
+      box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.45);
       padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
       z-index: 10;
       display: none;
     }
-    .bar-inner {
-      max-width: 440px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    .bar-inner { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
     .chips { display: flex; gap: 8px; align-items: center; justify-content: center; }
     .chip {
       width: 56px;
       height: 56px;
-      border-radius: 12px;
-      background: #1e293b;
-      border: 3px solid #334155;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.12);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       padding: 3px;
-      font-size: 1.6rem;
-      color: #cbd5e1;
+      font-size: 1.5rem;
+      color: var(--amber);
     }
     .chip img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-    .chip.selected { border-color: #a78bfa; background: #2e2a5a; }
-    .chip.add { border-style: dashed; }
+    .chip.selected { border-color: var(--amber); background: rgba(245, 194, 107, 0.14); box-shadow: 0 0 14px rgba(245, 194, 107, 0.35); }
+    .chip.add { border-style: dashed; border-color: rgba(245, 194, 107, 0.45); }
 
     .size-row { display: flex; align-items: center; gap: 12px; }
-    .size-row input { flex: 1; accent-color: #7c3aed; height: 32px; }
+    .size-row input { flex: 1; accent-color: var(--amber); height: 32px; }
     .size-row .small { font-size: 1rem; }
     .size-row .big { font-size: 1.6rem; }
     .icon-btn {
       width: 48px;
       height: 48px;
-      border-radius: 12px;
-      border: none;
-      background: #7f1d1d;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 120, 100, 0.35);
+      background: rgba(120, 30, 30, 0.45);
       color: white;
       font-size: 1.3rem;
       cursor: pointer;
@@ -173,7 +252,7 @@
     .modal {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(4, 6, 12, 0.78);
       z-index: 20;
       align-items: center;
       justify-content: center;
@@ -183,19 +262,70 @@
     .modal-box {
       width: 100%;
       max-width: 400px;
-      background: #1e293b;
-      border-radius: 16px;
+      background: #121828;
+      border: 1px solid var(--line);
+      border-radius: 18px;
       padding: 18px;
       display: flex;
       flex-direction: column;
       gap: 12px;
+      box-shadow: 0 0 40px rgba(217, 143, 43, 0.18);
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .flame, .flame-wrap::before, .spinner { animation: none; }
+    }
+
   </style>
 </head>
 <body>
 
-  <h1>🕯️ Wizualizator Znicza</h1>
-  <p class="subtitle">Zobacz, jak wybrane znicze będą wyglądały na grobie, zanim je kupisz.</p>
+
+  <div class="hero">
+    <div class="flame-wrap" aria-hidden="true">
+      <svg viewBox="0 0 220 160">
+        <defs>
+          <radialGradient id="fg" cx="50%" cy="72%" r="65%">
+            <stop offset="0%" stop-color="#fff6d6"/>
+            <stop offset="45%" stop-color="#ffd36b"/>
+            <stop offset="100%" stop-color="#ef8a2a"/>
+          </radialGradient>
+          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#fbe3a8"/>
+            <stop offset="100%" stop-color="#c98a2c"/>
+          </linearGradient>
+        </defs>
+
+        <!-- ziemia -->
+        <line x1="14" y1="146" x2="206" y2="146" stroke="#f5c26b" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round"/>
+
+        <!-- krzyż -->
+        <g class="hero-cross">
+          <rect x="102" y="6" width="16" height="140" rx="2" fill="url(#cg)"/>
+          <rect x="72" y="36" width="76" height="16" rx="2" fill="url(#cg)"/>
+        </g>
+
+        <!-- znicze po bokach -->
+        <g>
+          <rect x="31" y="112" width="18" height="34" rx="3" fill="#efe3c6"/>
+          <rect x="39" y="107" width="2" height="7" fill="#3b2f20"/>
+          <g transform="translate(40 100)">
+            <g class="flame"><path d="M0 -17 C6 -5 12 3 12 11 A12 12 0 0 1 -12 11 C-12 3 -6 -1 -3 -9 C-2 -6 -1 -4 0 -1 C3 -8 1 -12 0 -17 Z" fill="url(#fg)"/></g>
+          </g>
+        </g>
+        <g>
+          <rect x="171" y="112" width="18" height="34" rx="3" fill="#efe3c6"/>
+          <rect x="179" y="107" width="2" height="7" fill="#3b2f20"/>
+          <g transform="translate(180 100)">
+            <g class="flame b"><path d="M0 -17 C6 -5 12 3 12 11 A12 12 0 0 1 -12 11 C-12 3 -6 -1 -3 -9 C-2 -6 -1 -4 0 -1 C3 -8 1 -12 0 -17 Z" fill="url(#fg)"/></g>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <h1>Wizualizator Zniczy</h1>
+    <div class="ornament">✦ ✦ ✦</div>
+  </div>
+  <p class="subtitle">Zobacz, jak wybrane znicze będą wyglądały na grobie bliskich, zanim je zapalisz.</p>
 
   <div class="card">
     <div class="card-title">Krok 1. Zdjęcie nagrobka</div>
@@ -728,7 +858,7 @@
       const pad = lw * 3;
       c.save();
       c.lineWidth = lw;
-      c.strokeStyle = '#a78bfa';
+      c.strokeStyle = '#f5c26b';
       c.setLineDash([lw * 3, lw * 2]);
       c.strokeRect(x0 - pad, y0 - pad, w + pad * 2, h + pad * 2);
       c.restore();
